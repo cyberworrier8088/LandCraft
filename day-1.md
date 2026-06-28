@@ -12,3 +12,4 @@ My goal:
 
 today i am going to learn bevy basics.
 i used this documention [bevy doc] (https://bevy.org) but something undestand but somthing not undestnaded :)
+and i learned how to commit more betterly using: feat:, doc:, and etc.
