@@ -26,6 +26,13 @@ pub fn setup_player(mut commands: Commands) {
 }
 
 
+
+// this function for player movement controll users easly. 
+// for WASD in key
+// w means forward
+// s means backward
+// a means left
+// d means right
 pub fn player_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,

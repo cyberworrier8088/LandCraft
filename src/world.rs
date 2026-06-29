@@ -1,6 +1,11 @@
+// src/world.rs
+
+
 use bevy::math::primitives::Cuboid;
 use bevy::prelude::*;
 
+
+// function for setup world.
 pub fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -10,7 +15,9 @@ pub fn setup_world(
 
     let grass = materials.add(Color::srgb(0.3, 0.8, 0.3));
 
-
+    // it is for creating a 64x64 grid of cubes. 
+    // x is maths 
+    // y is maths :)
     for x in 0..64 {
         for z in 0..64 {
             commands.spawn((
