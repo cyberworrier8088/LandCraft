@@ -1,5 +1,8 @@
 use bevy::prelude::*;
 
+use bevy::input::mouse::MouseMotion;
+use bevy::prelude::MessageReader;
+
 #[derive(Component)]
 pub struct Player;
 
@@ -76,4 +79,13 @@ pub fn player_movement(
     let speed = 5.0;
 
     transform.translation += direction.normalize_or_zero() * speed * time.delta_secs();
+}
+
+
+pub fn mouse_look(
+    mut mouse_events: MessageReader<MouseMotion>,
+) {
+    for event in mouse_events.read() {
+        println!("Mouse moved: x = {}, y = {}", event.delta.x, event.delta.y)
+    };
 }
