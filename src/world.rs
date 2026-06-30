@@ -18,8 +18,8 @@ pub fn setup_world(
     // it is for creating a 64x64 grid of cubes. 
     // x is maths 
     // y is maths :)
-    for x in 0..64 {
-        for z in 0..64 {
+    for x in 0..16 {
+        for z in 0..16 {
             commands.spawn((
                 Mesh3d(cube.clone()),
                 MeshMaterial3d(grass.clone()),

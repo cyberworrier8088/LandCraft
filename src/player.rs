@@ -3,11 +3,21 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Player;
 
+#[derive(Component)]
+pub struct LookAngles {
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
 pub fn setup_player(mut commands: Commands) {
     commands.spawn((
         Player,
+        LookAngles {
+            yaw: 0.0,
+            pitch: 0.0,
+        },
         Camera3d::default(),
-        Transform::from_xyz(8.0, 8.0, 16.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(8.0, 8.0, 16.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
     commands.spawn((
