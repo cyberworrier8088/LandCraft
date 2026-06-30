@@ -84,8 +84,17 @@ pub fn player_movement(
 
 pub fn mouse_look(
     mut mouse_events: MessageReader<MouseMotion>,
+    mut query: Query<(&mut Transform, &mut LookAngles), With<Player>>,
 ) {
+
+
+    let (mut transform, mut angles) = query.single_mut().unwrap();
+
     for event in mouse_events.read() {
-        println!("Mouse moved: x = {}, y = {}", event.delta.x, event.delta.y)
+        angles.yaw -= event.delta.x * 0.003;
+
+        transform.rotation = Quat::from_rotation_y(angles.yaw);
+
+        println!("Yaw: {}", angles.yaw)
     };
 }
