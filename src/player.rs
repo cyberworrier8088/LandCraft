@@ -92,9 +92,15 @@ pub fn mouse_look(
 
     for event in mouse_events.read() {
         angles.yaw -= event.delta.x * 0.003;
+        angles.pitch -= event.delta.y * 0.003;
 
-        transform.rotation = Quat::from_rotation_y(angles.yaw);
+        transform.rotation = Quat::from_euler(
+            EulerRot::YXZ,
+            angles.yaw,
+            angles.pitch,
+            0.0,
+        );
 
-        println!("Yaw: {}", angles.yaw)
+        println!("Yaw: {}, Pitch: {}", angles.yaw, angles.pitch);
     };
 }
