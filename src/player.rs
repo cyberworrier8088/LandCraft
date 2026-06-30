@@ -92,7 +92,7 @@ pub fn mouse_look(
 
     for event in mouse_events.read() {
         angles.yaw -= event.delta.x * 0.003;
-        angles.pitch -= event.delta.y * 0.003;
+        angles.pitch = angles.pitch.clamp(-1.54, 1.54);
 
         transform.rotation = Quat::from_euler(
             EulerRot::YXZ,
