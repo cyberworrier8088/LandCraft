@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::MessageReader;
+use bevy::window::{CursorGrabMode, CursorOptions};
 
 #[derive(Component)]
 pub struct Player;
@@ -110,4 +111,11 @@ pub fn mouse_look(
 
         println!("Yaw: {}, Pitch: {}", angles.yaw, angles.pitch);
     };
+}
+
+
+pub fn lock_cursor(
+    mut cursor_options: Single<&mut CursorOptions>,
+) {
+    cursor_options.grab_mode = CursorGrabMode::Locked;
 }
