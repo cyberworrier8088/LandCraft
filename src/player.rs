@@ -55,23 +55,29 @@ pub fn player_movement(
 
     let mut direction = Vec3::ZERO;
 
+    let forward = *transform.forward();
+
+    let right = *transform.right();
+
+
+
     if keyboard.pressed(KeyCode::KeyW) {
-        direction.z -= 1.0;
+        direction += forward;
         println!("W");
     }
 
     if keyboard.pressed(KeyCode::KeyS) {
-        direction.z += 1.0;
+        direction -= forward;
         println!("S");
     }
 
     if keyboard.pressed(KeyCode::KeyA) {
-        direction.x -= 1.0;
+        direction -= right;
         println!("A");
     }
 
     if keyboard.pressed(KeyCode::KeyD) {
-        direction.x += 1.0;
+        direction += right;
         println!("D");
     }
 
