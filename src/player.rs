@@ -1,3 +1,5 @@
+// src/player.rs
+
 use bevy::prelude::*;
 
 use bevy::input::mouse::MouseMotion;
@@ -5,17 +7,22 @@ use bevy::prelude::MessageReader;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
 
+// ca;lling block to use it. 
 use crate::world::Block;
+
 
 #[derive(Component)]
 pub struct Player;
 
 #[derive(Component)]
 pub struct LookAngles {
-    pub yaw: f32,
-    pub pitch: f32,
+    pub yaw: f32, // yaw means left and right
+    pub pitch: f32, // pitch means up and down
 }
 
+
+
+// setup player function 
 pub fn setup_player(mut commands: Commands) {
     commands.spawn((
         Player,
@@ -92,6 +99,8 @@ pub fn player_movement(
 }
 
 
+
+// function for mouse look means a player can look around fixed.
 pub fn mouse_look(
     mut mouse_events: MessageReader<MouseMotion>,
     mut query: Query<(&mut Transform, &mut LookAngles), With<Player>>,
@@ -117,15 +126,17 @@ pub fn mouse_look(
 }
 
 
+
+// function for lock cursor means mouse cursor lock not visible :) 
 pub fn lock_cursor(
     mut cursor_options: Single<&mut CursorOptions>,
 ) {
     cursor_options.grab_mode = CursorGrabMode::Locked;
-    cursor_options.visible = false;
+    cursor_options.visible = false; // cursor hidding
 }
 
 
-
+// function ffor detect block means block how much
 pub fn detect_block(
     blocks: Query<&Transform, With<Block>>,
 ) {
