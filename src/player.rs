@@ -118,4 +118,5 @@ pub fn lock_cursor(
     mut cursor_options: Single<&mut CursorOptions>,
 ) {
     cursor_options.grab_mode = CursorGrabMode::Locked;
+    cursor_options.visible = false;
 }
