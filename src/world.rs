@@ -5,6 +5,10 @@ use bevy::math::primitives::Cuboid;
 use bevy::prelude::*;
 
 
+
+#[derive(Component)]
+pub struct Block;
+
 // function for setup world.
 pub fn setup_world(
     mut commands: Commands,
@@ -21,6 +25,7 @@ pub fn setup_world(
     for x in 0..16 {
         for z in 0..16 {
             commands.spawn((
+                Block,
                 Mesh3d(cube.clone()),
                 MeshMaterial3d(grass.clone()),
                 Transform::from_xyz(x as f32, 0.0, z as f32),

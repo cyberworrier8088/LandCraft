@@ -4,6 +4,9 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::MessageReader;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
+
+use crate::world::Block;
+
 #[derive(Component)]
 pub struct Player;
 
@@ -119,4 +122,12 @@ pub fn lock_cursor(
 ) {
     cursor_options.grab_mode = CursorGrabMode::Locked;
     cursor_options.visible = false;
+}
+
+
+
+pub fn detect_block(
+    blocks: Query<&Transform, With<Block>>,
+) {
+    println!("Blocks: {}", blocks.iter().count());
 }
