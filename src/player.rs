@@ -146,7 +146,12 @@ pub fn detect_block(
 
     let forward = *player_transform.forward();
 
+    let ray_distance = 5.0;
+
+    let ray_end = player_transform.translation + forward * ray_distance;
+
     println!("Player Position: {:?}, Forward: {:?}", player_transform.translation, forward);
+    println!("Ray End: {:?}", ray_end);
 
 
 }
