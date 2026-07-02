@@ -138,7 +138,15 @@ pub fn lock_cursor(
 
 // function ffor detect block means block how much
 pub fn detect_block(
+    player: Query<&Transform, With<Player>>,
     blocks: Query<&Transform, With<Block>>,
+
 ) {
-    println!("Blocks: {}", blocks.iter().count());
+    let player_transform = player.single().unwrap();
+
+    let forward = *player_transform.forward();
+
+    println!("Player Position: {:?}, Forward: {:?}", player_transform.translation, forward);
+
+
 }
