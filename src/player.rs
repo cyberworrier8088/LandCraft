@@ -138,25 +138,49 @@ pub fn lock_cursor(
 
 // function ffor detect block means block how much
 pub fn detect_block(
+    mut commands: Commands,
+    mouse: Res<ButtonInput<MouseButton>>,
     player: Query<&Transform, With<Player>>,
-    blocks: Query<&Transform, With<Block>>,
+    blocks: Query<(Entity, &Transform), With<Block>>,
 
 ) {
+    // mouse butter preess  geting fuunction
+    if !mouse.just_pressed(MouseButton::Left) {
+        return
+    }
+
     let player_transform = player.single().unwrap();
 
     let forward = *player_transform.forward();
 
     let ray_distance = 5.0;
+    let step_size = 0.1;
+    let mut distance = 0.0;
 
-    let ray_end = player_transform.translation + forward * ray_distance;
+
+    // this is for raycasting.
+    'raycast: while distance <= ray_distance {
+        
+        let point = player_transform.translation + forward * distance;
+
+        for (block_entity, block_transform) in blocks.iter() {
+            let block_position = point.distance(block_transform.translation);
 
 
-    for block_transform in blocks.iter() {
-        println!("{:?}", block_transform.translation);
+            if block_position < 0.5 {
+                println!("HIT BLOCK!: {:?}", block_entity);
+
+                commands.entity(block_entity).despawn();
+
+                break 'raycast;
+            }
+        
+        }
+
+        // for cheaking block at the perticuler point.
+        println!("Ray Point: {:?}", point);
+        distance += step_size;
     }
-
-    println!("Player Position: {:?}, Forward: {:?}", player_transform.translation, forward);
-    println!("Ray End: {:?}", ray_end);
 
 
 }
