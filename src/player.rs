@@ -8,7 +8,7 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 
 
 // ca;lling block to use it. 
-use crate::world::Block;
+use crate::world::{spawn_block, Block, BlockAssets};
 
 
 #[derive(Component)]
@@ -140,13 +140,17 @@ pub fn lock_cursor(
 pub fn detect_block(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
+    block_assets: Res<BlockAssets>,
     player: Query<&Transform, With<Player>>,
     blocks: Query<(Entity, &Transform), With<Block>>,
 
 ) {
     // mouse butter preess  geting fuunction
-    if !mouse.just_pressed(MouseButton::Left) {
-        return
+    let left_click = mouse.just_pressed(MouseButton::Left);
+    let right_click = mouse.just_pressed(MouseButton::Right);
+
+    if !left_click && !right_click {
+        return;
     }
 
     let player_transform = player.single().unwrap();
@@ -156,6 +160,8 @@ pub fn detect_block(
     let ray_distance = 5.0;
     let step_size = 0.1;
     let mut distance = 0.0;
+
+    let mut previous_point = player_transform.translation;
 
 
     // this is for raycasting.
@@ -170,7 +176,23 @@ pub fn detect_block(
             if block_position < 0.5 {
                 println!("HIT BLOCK!: {:?}", block_entity);
 
-                commands.entity(block_entity).despawn();
+                if left_click {
+                    commands.entity(block_entity).despawn();
+                }
+
+                if right_click {
+
+                    let place_position = previous_point.round();
+
+                    println!("PLACE BLOCK AT: {:?}", place_position);
+
+                    spawn_block(
+                        &mut commands,
+                        place_position,
+                        block_assets.mesh.clone(),
+                        block_assets.material.clone(),
+                    );
+                }
 
                 break 'raycast;
             }
@@ -179,7 +201,9 @@ pub fn detect_block(
 
         // for cheaking block at the perticuler point.
         println!("Ray Point: {:?}", point);
+        previous_point = point;
         distance += step_size;
+        
     }
 
 
