@@ -22,5 +22,8 @@ day-6 i can work so much hours becuse i have no school 🥲
 
 ## this is hard to do all alone without ai but i will do it :(. that so much time fi reserching and learning.  that way i added 1 hour for jornel becuse so much horse add evaryone thing i was faking horse.
 
+## pls not thing i faking i add hourse so much pls understand my situation. 
+## today reserch and evarthing consumed 4h
+
 
 ## not vibe coding why i was lesss code and so much hourse reserch
