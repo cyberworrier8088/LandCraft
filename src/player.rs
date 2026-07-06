@@ -6,6 +6,9 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::MessageReader;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
+// add cube id
+use bevy::math::primitives::Cuboid;
+
 
 // ca;lling block to use it. 
 use crate::world::{spawn_block, Block, BlockAssets};
@@ -13,6 +16,14 @@ use crate::world::{spawn_block, Block, BlockAssets};
 
 #[derive(Component)]
 pub struct Player;
+
+
+// struct for higlyting the player sellect and break or add block. :)
+#[derive(Component)]
+pub struct SellectBlock;
+
+#[derive(Component)]
+pub struct BlockHighlight;
 
 // volocity 
 #[derive(Component)]
@@ -300,4 +311,85 @@ pub fn ground_collision(
     }
 
     println!("FEET: {:?}", feet_position);
+}
+
+
+// player block touch time highylight function
+pub fn select_block(
+    mut commands: Commands,
+    player: Query<&Transform, With<Player>>,
+    blocks: Query<(Entity, &Transform), With<Block>>,
+    selected_blocks: Query<Entity, With<SellectBlock>>,
+) {
+    /// remove selection from the previosly selected block.
+    for entity in selected_blocks.iter() {
+        commands.entity(entity).remove::<SellectBlock>();
+    }
+
+    let player_transform = player.single().unwrap();
+
+
+    let forward = *player_transform.forward();
+
+    let ray_distance = 5.0;
+    let step_size = 0.1;
+    let mut distance = 0.0;
+
+    'raycast: while distance <= ray_distance {
+        let point = player_transform.translation + forward * distance;
+
+        for (block_entity, block_transform) in blocks.iter() {
+            let distance_to_block = point.distance(block_transform.translation);
+
+            if distance_to_block < 0.5 {
+                commands.entity(block_entity).insert(SellectBlock);
+                println!("Selected Block: {:?}", block_entity);
+                break 'raycast;
+            }
+        }
+
+        distance += step_size;
+    }
+}
+
+
+pub fn setup_block_highlight(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let highlight_mesh = meshes.add(Cuboid::new(1.02, 1.02, 1.02));
+
+    let highlight_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 1.0, 1.0, 0.25),
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+
+    commands.spawn((
+        BlockHighlight,
+        Mesh3d(highlight_mesh),
+        MeshMaterial3d(highlight_material),
+        Transform::default(),
+        Visibility::Hidden,
+    ));
+}
+
+pub fn update_block_highlight(
+    selected_blocks: Query<&Transform, With<SellectBlock>>,
+    mut highlight: Query<
+        (&mut Transform, &mut Visibility),
+        (With<BlockHighlight>, Without<SellectBlock>),
+    >,
+) {
+    let (mut highlight_transform, mut visibility) =
+        highlight.single_mut().unwrap();
+
+    if let Ok(selected_transform) = selected_blocks.single() {
+        highlight_transform.translation = selected_transform.translation;
+
+        *visibility = Visibility::Visible;
+    } else {
+        *visibility = Visibility::Hidden;
+    }
 }
