@@ -18,6 +18,11 @@ use crate::world::{spawn_block, Block, BlockAssets};
 pub struct Player;
 
 
+#[derive(Component)]
+pub struct CameraPivot;
+
+
+
 // struct for higlyting the player sellect and break or add block. :)
 #[derive(Component)]
 pub struct SellectBlock;
@@ -47,9 +52,9 @@ pub struct LookAngles {
 
 // setup player function 
 pub fn setup_player(mut commands: Commands) {
+    // spawn player root with camera and look components
     commands.spawn((
         Player,
-
         Velocity {
             value: Vec3::ZERO,
         },
@@ -60,11 +65,20 @@ pub fn setup_player(mut commands: Commands) {
             yaw: 0.0,
             pitch: 0.0,
         },
-        Camera3d::default(),
-        Transform::from_xyz(8.0, 8.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(8.0, 8.0, 8.0),
 
-        
-    ));
+    ))
+    .with_children(|parent| {
+        parent.spawn((
+            CameraPivot,
+            Transform::default(),
+        )).with_children(|pivot| {
+            pivot.spawn((
+                Camera3d::default(),
+                Transform::from_xyz(0.0, 1.6, 0.0),
+            ));
+        });
+    }); 
 
     commands.spawn((
         DirectionalLight {
@@ -139,23 +153,22 @@ pub fn player_movement(
 // function for mouse look means a player can look around fixed.
 pub fn mouse_look(
     mut mouse_events: MessageReader<MouseMotion>,
-    mut query: Query<(&mut Transform, &mut LookAngles), With<Player>>,
+    mut player: Query<(&mut Transform, &mut LookAngles), With<Player>>,
+    mut pivot: Query<&mut Transform, (With<CameraPivot>, Without<Player>)>
 ) {
 
 
-    let (mut transform, mut angles) = query.single_mut().unwrap();
+    let (mut player_transform, mut angles) = player.single_mut().unwrap();
+    let mut pivot_transform = pivot.single_mut().unwrap();
 
     for event in mouse_events.read() {
         angles.yaw -= event.delta.x * 0.003;
         angles.pitch -= event.delta.y * 0.003;
         angles.pitch = angles.pitch.clamp(-1.54, 1.54);
 
-        transform.rotation = Quat::from_euler(
-            EulerRot::YXZ,
-            angles.yaw,
-            angles.pitch,
-            0.0,
-        );
+        player_transform.rotation = Quat::from_rotation_y(angles.yaw);
+
+        pivot_transform.rotation = Quat::from_rotation_x(angles.pitch);
 
         println!("Yaw: {}, Pitch: {}", angles.yaw, angles.pitch);
     };
