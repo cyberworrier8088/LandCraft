@@ -318,7 +318,7 @@ pub fn select_block(
     blocks: Query<(Entity, &Transform), With<Block>>,
     selected_blocks: Query<Entity, With<SellectBlock>>,
 ) {
-    /// remove selection from the previosly selected block.
+    // remove selection from the previosly selected block.
     for entity in selected_blocks.iter() {
         commands.entity(entity).remove::<SellectBlock>();
     }
@@ -392,3 +392,6 @@ pub fn update_block_highlight(
         *visibility = Visibility::Hidden;
     }
 }
+
+
+
