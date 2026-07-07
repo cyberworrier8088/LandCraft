@@ -37,12 +37,18 @@ pub fn spawn_block(
 // function for setup world.
 pub fn setup_world(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
 
-    let grass = materials.add(Color::srgb(0.3, 0.8, 0.3));
+    let grass_texture = asset_server.load("block/grass/grass-top.png");
+
+    let grass = materials.add(StandardMaterial {
+        base_color_texture: Some(grass_texture),
+        ..default()
+    });
     
     commands.insert_resource(BlockAssets {
     mesh: cube.clone(),

@@ -21,7 +21,7 @@ pub fn setup_crosshair(
         })
         .with_children(|parent| {
             parent.spawn((
-                ImageNode::new(asset_server.load("crosshair.png")),
+                ImageNode::new(asset_server.load("ui/crosshair.png")),
                 Node {
                     width: Val::Px(24.0),
                     height: Val::Px(24.0),

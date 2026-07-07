@@ -217,10 +217,7 @@ pub fn detect_block(
                 }
 
                 if right_click {
-
                     let place_position = previous_point.round();
-
-                    println!("PLACE BLOCK AT: {:?}", place_position);
 
                     spawn_block(
                         &mut commands,
@@ -375,6 +372,8 @@ pub fn setup_block_highlight(
     ));
 }
 
+
+//
 pub fn update_block_highlight(
     selected_blocks: Query<&Transform, With<SellectBlock>>,
     mut highlight: Query<

@@ -10,7 +10,7 @@ use bevy::prelude::*;
 
 fn main() {
 
-    App::new().add_plugins(DefaultPlugins).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight,))
+    App::new().add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight,))
     .add_systems(
         Update, (
             player::player_movement,
