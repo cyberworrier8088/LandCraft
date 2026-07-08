@@ -228,7 +228,7 @@ pub fn detect_block(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
     block_assets: Res<BlockAssets>,
-    player: Query<&Transform, With<Player>>,
+    camera: Query<&GlobalTransform, With<GameCamera>>,
     blocks: Query<(Entity, &Transform), With<Block>>,
 
 ) {
@@ -240,21 +240,21 @@ pub fn detect_block(
         return;
     }
 
-    let player_transform = player.single().unwrap();
+    let camera_transform = camera.single().unwrap();
 
-    let forward = *player_transform.forward();
+    let forward = camera_transform.forward();
 
     let ray_distance = 5.0;
     let step_size = 0.1;
     let mut distance = 0.0;
 
-    let mut previous_point = player_transform.translation;
+    let mut previous_point = camera_transform.translation();
 
 
     // this is for raycasting.
     'raycast: while distance <= ray_distance {
         
-        let point = player_transform.translation + forward * distance;
+        let point = camera_transform.translation() + forward * distance;
 
         for (block_entity, block_transform) in blocks.iter() {
             let block_position = point.distance(block_transform.translation);
@@ -365,7 +365,7 @@ pub fn ground_collision(
 // player block touch time highylight function
 pub fn select_block(
     mut commands: Commands,
-    player: Query<&Transform, With<Player>>,
+    camera: Query<&GlobalTransform, With<GameCamera>>,
     blocks: Query<(Entity, &Transform), With<Block>>,
     selected_blocks: Query<Entity, With<SellectBlock>>,
 ) {
@@ -374,17 +374,17 @@ pub fn select_block(
         commands.entity(entity).remove::<SellectBlock>();
     }
 
-    let player_transform = player.single().unwrap();
+    let camera_transform = camera.single().unwrap();
 
 
-    let forward = *player_transform.forward();
+    let forward = camera_transform.forward();
 
     let ray_distance = 5.0;
     let step_size = 0.1;
     let mut distance = 0.0;
 
     'raycast: while distance <= ray_distance {
-        let point = player_transform.translation + forward * distance;
+        let point = camera_transform.translation() + forward * distance;
 
         for (block_entity, block_transform) in blocks.iter() {
             let distance_to_block = point.distance(block_transform.translation);
