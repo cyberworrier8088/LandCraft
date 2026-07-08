@@ -10,8 +10,8 @@ pub fn setup_player_model(
 ) {
     commands.spawn((
         PlayerRoot,
-        WorldAssetRoot(asset_server.load("models/player.glb#Scene0")),
-        Transform::from_xyz(8.0, 0.0, 8.0),
+        WorldAssetRoot(asset_server.load("player/player.glb#Scene0")),
+        Transform::from_xyz(8.0, 8.0, 8.0).with_scale(Vec3::splat(0.35)),
     ));
 }
 
@@ -21,7 +21,7 @@ pub fn sync_player_model(
 ) {
     if let Ok((player_transform, look_angles)) = player_q.single() {
         if let Ok(mut model_transform) = model_q.single_mut() {
-            model_transform.translation = player_transform.translation - Vec3::new(0.0, 1.5, 0.0);
+            model_transform.translation = player_transform.translation;
             model_transform.rotation = Quat::from_rotation_y(look_angles.yaw);
         }
     }

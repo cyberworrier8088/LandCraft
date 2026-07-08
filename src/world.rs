@@ -44,6 +44,7 @@ pub fn setup_world(
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
 
     let grass_texture = asset_server.load("block/grass/grass-top.png");
+    
 
     let grass = materials.add(StandardMaterial {
         base_color_texture: Some(grass_texture),

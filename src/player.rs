@@ -21,6 +21,14 @@ pub struct Player;
 #[derive(Component)]
 pub struct CameraPivot;
 
+#[derive(Component)]
+pub struct GameCamera;
+
+#[derive(Component)]
+pub struct CameraView {
+    third_person: bool,
+}
+
 
 
 // struct for higlyting the player sellect and break or add block. :)
@@ -46,6 +54,12 @@ pub struct OnGround {
 pub struct LookAngles {
     pub yaw: f32, // yaw means left and right
     pub pitch: f32, // pitch means up and down
+}
+
+#[derive(Resource)]
+pub struct MouseSettings {
+    pub sensitivity: f32,
+    
 }
 
 
@@ -75,6 +89,10 @@ pub fn setup_player(mut commands: Commands) {
         )).with_children(|pivot| {
             pivot.spawn((
                 Camera3d::default(),
+                GameCamera,
+                CameraView {
+                    third_person: false,
+                },
                 Transform::from_xyz(0.0, 1.6, 0.0),
             ));
         });
@@ -148,6 +166,26 @@ pub fn player_movement(
     transform.translation += direction.normalize_or_zero() * speed * time.delta_secs();
 }
 
+
+
+pub fn toggle_camera_view(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut camera: Query<(&mut Transform, &mut CameraView), With<GameCamera>>,
+) {
+    if !keyboard.just_pressed(KeyCode::F2) {
+        return;
+    }
+
+    if let Ok((mut transform, mut view)) = camera.single_mut() {
+        view.third_person = !view.third_person;
+
+        *transform = if view.third_person {
+            Transform::from_xyz(0.0, 1.6, 5.0).looking_at(Vec3::new(0.0, 0.9, 0.0), Vec3::Y)
+        } else {
+            Transform::from_xyz(0.0, 1.6, 0.0)
+        };
+    }
+}
 
 
 // function for mouse look means a player can look around fixed.
