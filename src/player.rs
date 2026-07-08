@@ -10,8 +10,13 @@ use bevy::window::{CursorGrabMode, CursorOptions};
 use bevy::math::primitives::Cuboid;
 
 
-// ca;lling block to use it. 
-use crate::world::{spawn_block, Block, BlockAssets};
+// for add a terrain height
+use crate::world::{
+    spawn_block,
+    terrain_height,
+    Block,
+    BlockAssets,
+};
 
 
 #[derive(Component)]
@@ -44,7 +49,7 @@ pub struct Velocity {
     pub value: Vec3,
 }
 
-const JUMP_FORCE: f32 = 6.5;
+const JUMP_FORCE: f32 = 18.5;
 const PLAYER_WIDTH: f32 = 0.6;
 const PLAYER_HEIGHT: f32 = 1.8;
 // onground
@@ -63,6 +68,11 @@ pub struct LookAngles {
 
 // setup player function 
 pub fn setup_player(mut commands: Commands) {
+
+    // player position spawn
+    let spawn_x = 8;
+    let spawn_z = 8;
+    let spawn_y = terrain_height(spawn_x, spawn_z) + 2;
     // spawn player root with camera and look components
     commands.spawn((
         Player,
@@ -76,7 +86,7 @@ pub fn setup_player(mut commands: Commands) {
             yaw: 0.0,
             pitch: 0.0,
         },
-        Transform::from_xyz(8.0, 8.0, 8.0),
+        Transform::from_xyz(spawn_x as f32, spawn_y as f32, spawn_z as f32),
 
     ))
     .with_children(|parent| {
@@ -305,7 +315,7 @@ pub fn setup_block_highlight(
 }
 
 
-//
+// update highy light funct
 pub fn update_block_highlight(
     selected_blocks: Query<&Transform, With<SellectBlock>>,
     mut highlight: Query<
