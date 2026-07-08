@@ -44,6 +44,9 @@ pub struct Velocity {
     pub value: Vec3,
 }
 
+const JUMP_FORCE: f32 = 6.5;
+const PLAYER_WIDTH: f32 = 0.6;
+const PLAYER_HEIGHT: f32 = 1.8;
 // onground
 #[derive(Component)]
 pub struct OnGround {
@@ -54,12 +57,6 @@ pub struct OnGround {
 pub struct LookAngles {
     pub yaw: f32, // yaw means left and right
     pub pitch: f32, // pitch means up and down
-}
-
-#[derive(Resource)]
-pub struct MouseSettings {
-    pub sensitivity: f32,
-    
 }
 
 
@@ -123,50 +120,27 @@ pub fn setup_player(mut commands: Commands) {
 // d means right
 pub fn player_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<Player>>,
+    mut player: Query<(&Transform, &mut Velocity, &OnGround), With<Player>>,
 ) {
-    let mut transform = query.single_mut().unwrap();
-
+    let (transform, mut velocity, on_ground) = player.single_mut().unwrap();
     let mut direction = Vec3::ZERO;
-
     let mut forward = *transform.forward();
     forward.y = 0.0;
     forward = forward.normalize_or_zero();
-    
     let mut right = *transform.right();
     right.y = 0.0;
     right = right.normalize_or_zero();
 
+    if keyboard.pressed(KeyCode::KeyW) { direction += forward; }
+    if keyboard.pressed(KeyCode::KeyS) { direction -= forward; }
+    if keyboard.pressed(KeyCode::KeyA) { direction -= right; }
+    if keyboard.pressed(KeyCode::KeyD) { direction += right; }
+    if keyboard.just_pressed(KeyCode::Space) && on_ground.value { velocity.value.y = JUMP_FORCE; }
 
-
-    if keyboard.pressed(KeyCode::KeyW) {
-        direction += forward;
-        println!("W");
-    }
-
-    if keyboard.pressed(KeyCode::KeyS) {
-        direction -= forward;
-        println!("S");
-    }
-
-    if keyboard.pressed(KeyCode::KeyA) {
-        direction -= right;
-        println!("A");
-    }
-
-    if keyboard.pressed(KeyCode::KeyD) {
-        direction += right;
-        println!("D");
-    }
-
-
-    let speed = 5.0;
-
-    transform.translation += direction.normalize_or_zero() * speed * time.delta_secs();
+    let direction = direction.normalize_or_zero() * 5.0;
+    velocity.value.x = direction.x;
+    velocity.value.z = direction.z;
 }
-
-
 
 pub fn toggle_camera_view(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -207,8 +181,6 @@ pub fn mouse_look(
         player_transform.rotation = Quat::from_rotation_y(angles.yaw);
 
         pivot_transform.rotation = Quat::from_rotation_x(angles.pitch);
-
-        println!("Yaw: {}, Pitch: {}", angles.yaw, angles.pitch);
     };
 }
 
@@ -223,183 +195,92 @@ pub fn lock_cursor(
 }
 
 
-// function ffor detect block means block how much
-pub fn detect_block(
+pub fn apply_velocity(
+    time: Res<Time>,
+    mut player: Query<(&mut Transform, &mut Velocity, &mut OnGround), With<Player>>,
+    blocks: Query<&Transform, (With<Block>, Without<Player>)>,
+) {
+    let (mut transform, mut velocity, mut on_ground) = player.single_mut().unwrap();
+    let dt = time.delta_secs().min(0.03);
+    let half = Vec3::new(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.5);
+    on_ground.value = false;
+    velocity.value.y = (velocity.value.y - 24.0 * dt).max(-30.0);
+
+    if velocity.value.x != 0.0 {
+        transform.translation.x += velocity.value.x * dt;
+        for block in blocks.iter() {
+            let d = transform.translation - block.translation;
+            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+                transform.translation.x = block.translation.x - velocity.value.x.signum() * (half.x + 0.5);
+                velocity.value.x = 0.0;
+                break;
+            }
+        }
+    }
+
+    transform.translation.y += velocity.value.y * dt;
+    for block in blocks.iter() {
+        let d = transform.translation - block.translation;
+        if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+            on_ground.value = velocity.value.y < 0.0;
+            transform.translation.y = block.translation.y - velocity.value.y.signum() * (half.y + 0.5);
+            velocity.value.y = 0.0;
+            break;
+        }
+    }
+
+    if velocity.value.z != 0.0 {
+        transform.translation.z += velocity.value.z * dt;
+        for block in blocks.iter() {
+            let d = transform.translation - block.translation;
+            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+                transform.translation.z = block.translation.z - velocity.value.z.signum() * (half.z + 0.5);
+                velocity.value.z = 0.0;
+                break;
+            }
+        }
+    }
+}
+
+pub fn select_block(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
     block_assets: Res<BlockAssets>,
     camera: Query<&GlobalTransform, With<GameCamera>>,
     blocks: Query<(Entity, &Transform), With<Block>>,
-
-) {
-    // mouse butter preess  geting fuunction
-    let left_click = mouse.just_pressed(MouseButton::Left);
-    let right_click = mouse.just_pressed(MouseButton::Right);
-
-    if !left_click && !right_click {
-        return;
-    }
-
-    let camera_transform = camera.single().unwrap();
-
-    let forward = camera_transform.forward();
-
-    let ray_distance = 5.0;
-    let step_size = 0.1;
-    let mut distance = 0.0;
-
-    let mut previous_point = camera_transform.translation();
-
-
-    // this is for raycasting.
-    'raycast: while distance <= ray_distance {
-        
-        let point = camera_transform.translation() + forward * distance;
-
-        for (block_entity, block_transform) in blocks.iter() {
-            let block_position = point.distance(block_transform.translation);
-
-
-            if block_position < 0.5 {
-                println!("HIT BLOCK!: {:?}", block_entity);
-
-                if left_click {
-                    commands.entity(block_entity).despawn();
-                }
-
-                if right_click {
-                    let place_position = previous_point.round();
-
-                    spawn_block(
-                        &mut commands,
-                        place_position,
-                        block_assets.mesh.clone(),
-                        block_assets.material.clone(),
-                    );
-                }
-
-                break 'raycast;
-            }
-        
-        }
-
-        // for cheaking block at the perticuler point.
-        println!("Ray Point: {:?}", point);
-        previous_point = point;
-        distance += step_size;
-        
-    }
-
-
-}
-
-
-pub fn apply_gravity(
-    time: Res<Time>,
-    mut player: Query<&mut Velocity, With<Player>>,
-
-) {
-    let mut velocity = player.single_mut().unwrap();
-
-    let gravity = -9.81;
-
-    velocity.value.y += gravity * time.delta_secs();
-}
-
-pub fn apply_velocity(
-    time: Res<Time>,
-    mut player: Query<(&mut Transform, &Velocity), With<Player>>,
-) {
-    let (mut transform, velocity) = player.single_mut().unwrap();
-
-    transform.translation += velocity.value * time.delta_secs();
-}
-
-
-
-// adding grond collision
-pub fn ground_collision(
-    mut player: Query<(&mut Transform, &mut Velocity,  &mut OnGround), With<Player>>,
-    blocks: Query<&Transform, (With<Block>, Without<Player>)>,
-) {
-    
-    let (mut player_transform, mut velocity, mut on_ground) = player.single_mut().unwrap();
-
-    on_ground.value = false;
-
-    let player_half_height = 0.9;
-
-    let feet_position = player_transform.translation - Vec3::Y * player_half_height;
-
-
-    for block_transform in blocks.iter() {
-        let horizontal_distance = Vec2::new(
-            feet_position.x - block_transform.translation.x,
-            feet_position.z - block_transform.translation.z,
-        ).length();
-
-        let block_top = block_transform.translation.y + 0.5;
-
-
-        let vertical_distance = feet_position.y - block_top;
-
-
-        if horizontal_distance < 0.5
-        && vertical_distance <= 0.0
-        && velocity.value.y <= 0.0
-        {
-            player_transform.translation.y = block_top + player_half_height;
-
-            velocity.value.y = 0.0;
-
-            on_ground.value = true;
-        }
-
-        println!("Horizontal: {}, Vertical: {}", horizontal_distance, vertical_distance);
-    }
-
-    println!("FEET: {:?}", feet_position);
-}
-
-
-// player block touch time highylight function
-pub fn select_block(
-    mut commands: Commands,
-    camera: Query<&GlobalTransform, With<GameCamera>>,
-    blocks: Query<(Entity, &Transform), With<Block>>,
     selected_blocks: Query<Entity, With<SellectBlock>>,
 ) {
-    // remove selection from the previosly selected block.
     for entity in selected_blocks.iter() {
         commands.entity(entity).remove::<SellectBlock>();
     }
 
-    let camera_transform = camera.single().unwrap();
-
-
-    let forward = camera_transform.forward();
-
-    let ray_distance = 5.0;
-    let step_size = 0.1;
+    let camera = camera.single().unwrap();
+    let forward = camera.forward();
+    let left = mouse.just_pressed(MouseButton::Left);
+    let right = mouse.just_pressed(MouseButton::Right);
+    let mut last = camera.translation();
     let mut distance = 0.0;
 
-    'raycast: while distance <= ray_distance {
-        let point = camera_transform.translation() + forward * distance;
-
-        for (block_entity, block_transform) in blocks.iter() {
-            let distance_to_block = point.distance(block_transform.translation);
-
-            if distance_to_block < 0.5 {
-                commands.entity(block_entity).insert(SellectBlock);
-                println!("Selected Block: {:?}", block_entity);
-                break 'raycast;
+    while distance <= 6.0 {
+        let point = camera.translation() + forward * distance;
+        for (entity, block) in blocks.iter() {
+            let d = point - block.translation;
+            if d.x.abs() <= 0.5 && d.y.abs() <= 0.5 && d.z.abs() <= 0.5 {
+                if left {
+                    commands.entity(entity).despawn();
+                } else {
+                    commands.entity(entity).insert(SellectBlock);
+                    if right {
+                        spawn_block(&mut commands, last.round(), block_assets.mesh.clone(), block_assets.material.clone());
+                    }
+                }
+                return;
             }
         }
-
-        distance += step_size;
+        last = point;
+        distance += 0.1;
     }
 }
-
 
 pub fn setup_block_highlight(
     mut commands: Commands,
@@ -443,6 +324,5 @@ pub fn update_block_highlight(
         *visibility = Visibility::Hidden;
     }
 }
-
 
 

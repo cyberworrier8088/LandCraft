@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 fn main() {
 
-    App::new().insert_resource(player::MouseSettings {sensitivity: 0.003,}).add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight, player_model::setup_player_model,))
+    App::new().add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight, player_model::setup_player_model,))
     .add_systems(
         Update, (
             player::player_movement,
@@ -20,15 +20,10 @@ fn main() {
             player_model::sync_player_model,
             (
                 player::select_block,
-                player::detect_block,
                 player::update_block_highlight,
             ).chain(),
             exit::close_on_escape,
-            (
-                player::apply_gravity,
-                player::apply_velocity,
-                player::ground_collision,
-            ).chain()
+            player::apply_velocity
         ),
     )
     .run();
