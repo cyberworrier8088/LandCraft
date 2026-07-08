@@ -46,8 +46,15 @@ pub fn setup_world(
 
     let grass_texture = asset_server.load("block/grass/grass-top.png");
 
+    let stone_texture = asset_server.load("block/stone/cobblestone.png");
+
     let grass = materials.add(StandardMaterial {
         base_color_texture: Some(grass_texture),
+        ..default()
+    });
+
+    let stone = materials.add(StandardMaterial {
+        base_color_texture: Some(stone_texture),
         ..default()
     });
     
@@ -74,7 +81,11 @@ pub fn setup_world(
                         z as f32,
                     ),
                     cube.clone(),
-                    grass.clone(),
+                    if y == height {
+                        grass.clone()
+                    } else {
+                        stone.clone()
+                    },
                 );
             }
         }

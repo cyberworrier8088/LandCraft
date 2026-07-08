@@ -49,7 +49,7 @@ pub struct Velocity {
     pub value: Vec3,
 }
 
-const JUMP_FORCE: f32 = 18.5;
+const JUMP_FORCE: f32 = 8.0;
 const PLAYER_WIDTH: f32 = 0.6;
 const PLAYER_HEIGHT: f32 = 1.8;
 // onground
@@ -92,7 +92,7 @@ pub fn setup_player(mut commands: Commands) {
     .with_children(|parent| {
         parent.spawn((
             CameraPivot,
-            Transform::default(),
+            Transform::from_xyz(0.0, 0.7, 0.0),
         )).with_children(|pivot| {
             pivot.spawn((
                 Camera3d::default(),
@@ -100,7 +100,7 @@ pub fn setup_player(mut commands: Commands) {
                 CameraView {
                     third_person: false,
                 },
-                Transform::from_xyz(0.0, 1.6, 0.0),
+                Transform::default(),
             ));
         });
     }); 
@@ -130,6 +130,7 @@ pub fn setup_player(mut commands: Commands) {
 // d means right
 pub fn player_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
     mut player: Query<(&Transform, &mut Velocity, &OnGround), With<Player>>,
 ) {
     let (transform, mut velocity, on_ground) = player.single_mut().unwrap();
@@ -147,11 +148,11 @@ pub fn player_movement(
     if keyboard.pressed(KeyCode::KeyD) { direction += right; }
     if keyboard.just_pressed(KeyCode::Space) && on_ground.value { velocity.value.y = JUMP_FORCE; }
 
-    let direction = direction.normalize_or_zero() * 5.0;
-    velocity.value.x = direction.x;
-    velocity.value.z = direction.z;
+    let target = direction.normalize_or_zero() * 5.0;
+    let blend = (time.delta_secs() * 18.0).min(1.0);
+    velocity.value.x += (target.x - velocity.value.x) * blend;
+    velocity.value.z += (target.z - velocity.value.z) * blend;
 }
-
 pub fn toggle_camera_view(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut camera: Query<(&mut Transform, &mut CameraView), With<GameCamera>>,
@@ -164,9 +165,9 @@ pub fn toggle_camera_view(
         view.third_person = !view.third_person;
 
         *transform = if view.third_person {
-            Transform::from_xyz(0.0, 1.6, 5.0).looking_at(Vec3::new(0.0, 0.9, 0.0), Vec3::Y)
+            Transform::from_xyz(0.0, 0.0, 4.0)
         } else {
-            Transform::from_xyz(0.0, 1.6, 0.0)
+            Transform::default()
         };
     }
 }
@@ -220,7 +221,7 @@ pub fn apply_velocity(
         transform.translation.x += velocity.value.x * dt;
         for block in blocks.iter() {
             let d = transform.translation - block.translation;
-            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.45 && d.z.abs() < half.z + 0.5 {
                 transform.translation.x = block.translation.x - velocity.value.x.signum() * (half.x + 0.5);
                 velocity.value.x = 0.0;
                 break;
@@ -231,7 +232,7 @@ pub fn apply_velocity(
     transform.translation.y += velocity.value.y * dt;
     for block in blocks.iter() {
         let d = transform.translation - block.translation;
-        if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+        if d.x.abs() < half.x + 0.5 && d.y.abs() <= half.y + 0.5 && d.z.abs() < half.z + 0.5 {
             on_ground.value = velocity.value.y < 0.0;
             transform.translation.y = block.translation.y - velocity.value.y.signum() * (half.y + 0.5);
             velocity.value.y = 0.0;
@@ -243,7 +244,7 @@ pub fn apply_velocity(
         transform.translation.z += velocity.value.z * dt;
         for block in blocks.iter() {
             let d = transform.translation - block.translation;
-            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.45 && d.z.abs() < half.z + 0.5 {
                 transform.translation.z = block.translation.z - velocity.value.z.signum() * (half.z + 0.5);
                 velocity.value.z = 0.0;
                 break;
@@ -251,13 +252,13 @@ pub fn apply_velocity(
         }
     }
 }
-
 pub fn select_block(
     mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
     block_assets: Res<BlockAssets>,
     camera: Query<&GlobalTransform, With<GameCamera>>,
     blocks: Query<(Entity, &Transform), With<Block>>,
+    player: Query<&Transform, With<Player>>,
     selected_blocks: Query<Entity, With<SellectBlock>>,
 ) {
     for entity in selected_blocks.iter() {
@@ -281,7 +282,11 @@ pub fn select_block(
                 } else {
                     commands.entity(entity).insert(SellectBlock);
                     if right {
-                        spawn_block(&mut commands, last.round(), block_assets.mesh.clone(), block_assets.material.clone());
+                        let place = last.round();
+                        let d = player.single().unwrap().translation - place;
+                        if d.x.abs() >= PLAYER_WIDTH * 0.5 + 0.5 || d.y.abs() >= PLAYER_HEIGHT * 0.5 + 0.5 || d.z.abs() >= PLAYER_WIDTH * 0.5 + 0.5 {
+                            spawn_block(&mut commands, place, block_assets.mesh.clone(), block_assets.material.clone());
+                        }
                     }
                 }
                 return;
@@ -291,7 +296,6 @@ pub fn select_block(
         distance += 0.1;
     }
 }
-
 pub fn setup_block_highlight(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
