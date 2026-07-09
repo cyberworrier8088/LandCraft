@@ -1,7 +1,7 @@
 // src/world.rs
 
 
-use bevy::math::primitives::Cuboid;
+use crate::mesh::create_block_mesh;
 use bevy::prelude::*;
 
 
@@ -42,19 +42,17 @@ pub fn setup_world(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
 
-    let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let cube = meshes.add(create_block_mesh());
 
-    let grass_texture = asset_server.load("block/grass/grass-top.png");
-
-    let stone_texture = asset_server.load("block/stone/cobblestone.png");
+    let atlas_texture = asset_server.load("block/texture_atlas_cobblestone_grass.png");
 
     let grass = materials.add(StandardMaterial {
-        base_color_texture: Some(grass_texture),
+        base_color_texture: Some(atlas_texture.clone()),
         ..default()
     });
 
     let stone = materials.add(StandardMaterial {
-        base_color_texture: Some(stone_texture),
+        base_color_texture: Some(atlas_texture.clone()),
         ..default()
     });
     

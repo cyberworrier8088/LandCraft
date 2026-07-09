@@ -3,11 +3,10 @@
 use bevy::prelude::*;
 
 use bevy::input::mouse::MouseMotion;
-use bevy::prelude::MessageReader;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
-// add cube id
-use bevy::math::primitives::Cuboid;
+// Import our custom block mesh creator
+use crate::mesh::create_block_mesh;
 
 
 // for add a terrain height
@@ -297,7 +296,8 @@ pub fn setup_block_highlight(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let highlight_mesh = meshes.add(Cuboid::new(1.02, 1.02, 1.02));
+    // Use the custom block mesh instead of Bevy's built-in Cuboid
+    let highlight_mesh = meshes.add(create_block_mesh());
 
     let highlight_material = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 1.0, 1.0, 0.25),
@@ -309,7 +309,8 @@ pub fn setup_block_highlight(
         BlockHighlight,
         Mesh3d(highlight_mesh),
         MeshMaterial3d(highlight_material),
-        Transform::default(),
+        // Scale the highlight box to 1.02 to prevent z-fighting with the underlying blocks
+        Transform::from_scale(Vec3::splat(1.02)),
         Visibility::Hidden,
     ));
 }

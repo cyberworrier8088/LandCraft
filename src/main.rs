@@ -6,6 +6,7 @@ mod world;
 mod exit;
 mod ui;
 mod player_model;
+mod mesh;
 
 use bevy::prelude::*;
 
