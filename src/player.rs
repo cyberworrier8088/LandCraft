@@ -100,7 +100,7 @@ pub fn setup_player(mut commands: Commands) {
                 CameraView {
                     third_person: false,
                 },
-                Transform::default(),
+                Transform::from_xyz(0.0, 0.1, -0.35),
             ));
         });
     }); 
@@ -167,7 +167,7 @@ pub fn toggle_camera_view(
         *transform = if view.third_person {
             Transform::from_xyz(0.0, 0.0, 4.0)
         } else {
-            Transform::default()
+            Transform::from_xyz(0.0, 0.1, -0.35)
         };
     }
 }
@@ -179,24 +179,20 @@ pub fn mouse_look(
     mut player: Query<(&mut Transform, &mut LookAngles), With<Player>>,
     mut pivot: Query<&mut Transform, (With<CameraPivot>, Without<Player>)>
 ) {
-
+    let delta = mouse_events.read().fold(Vec2::ZERO, |sum, event| sum + event.delta);
+    if delta == Vec2::ZERO {
+        return;
+    }
 
     let (mut player_transform, mut angles) = player.single_mut().unwrap();
     let mut pivot_transform = pivot.single_mut().unwrap();
 
-    for event in mouse_events.read() {
-        angles.yaw -= event.delta.x * 0.003;
-        angles.pitch -= event.delta.y * 0.003;
-        angles.pitch = angles.pitch.clamp(-1.54, 1.54);
+    angles.yaw -= delta.x * 0.0025;
+    angles.pitch = (angles.pitch - delta.y * 0.0025).clamp(-1.54, 1.54);
 
-        player_transform.rotation = Quat::from_rotation_y(angles.yaw);
-
-        pivot_transform.rotation = Quat::from_rotation_x(angles.pitch);
-    };
+    player_transform.rotation = Quat::from_rotation_y(angles.yaw);
+    pivot_transform.rotation = Quat::from_rotation_x(angles.pitch);
 }
-
-
-
 // function for lock cursor means mouse cursor lock not visible :) 
 pub fn lock_cursor(
     mut cursor_options: Single<&mut CursorOptions>,
