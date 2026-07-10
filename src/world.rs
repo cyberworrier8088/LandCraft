@@ -1,7 +1,7 @@
 // src/world.rs
 
 
-use crate::mesh::create_block_mesh;
+use crate::mesh::{create_block_mesh, BlockType};
 use bevy::prelude::*;
 
 
@@ -34,6 +34,7 @@ pub fn spawn_block(
 }
 
 
+
 // function for setup world.
 pub fn setup_world(
     mut commands: Commands,
@@ -42,7 +43,8 @@ pub fn setup_world(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
 
-    let cube = meshes.add(create_block_mesh());
+    let grass_mesh = meshes.add(create_block_mesh(BlockType::Grass));
+    let stone_mesh = meshes.add(create_block_mesh(BlockType::Cobblestone));
 
     let atlas_texture = asset_server.load("block/texture_atlas_cobblestone_grass.png");
 
@@ -57,8 +59,8 @@ pub fn setup_world(
     });
     
     commands.insert_resource(BlockAssets {
-    mesh: cube.clone(),
-    material: grass.clone(),
+        mesh: grass_mesh.clone(),
+        material: grass.clone(),
     });
 
     // it is for creating a 64x64 grid of cubes. 
@@ -70,6 +72,7 @@ pub fn setup_world(
             let height = terrain_height(x, z);
             
             for y in 0..=height {
+                let is_grass = y == height;
                 spawn_block(
                     &mut commands,
 
@@ -78,12 +81,8 @@ pub fn setup_world(
                         y as f32,
                         z as f32,
                     ),
-                    cube.clone(),
-                    if y == height {
-                        grass.clone()
-                    } else {
-                        stone.clone()
-                    },
+                    if is_grass { grass_mesh.clone() } else { stone_mesh.clone() },
+                    if is_grass { grass.clone() } else { stone.clone() },
                 );
             }
         }

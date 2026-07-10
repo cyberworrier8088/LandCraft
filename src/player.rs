@@ -6,7 +6,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
 // Import our custom block mesh creator
-use crate::mesh::create_block_mesh;
+use crate::mesh::{create_block_mesh, BlockType};
 
 
 // for add a terrain height
@@ -297,7 +297,7 @@ pub fn setup_block_highlight(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Use the custom block mesh instead of Bevy's built-in Cuboid
-    let highlight_mesh = meshes.add(create_block_mesh());
+    let highlight_mesh = meshes.add(create_block_mesh(BlockType::Grass));
 
     let highlight_material = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 1.0, 1.0, 0.25),

@@ -4,10 +4,17 @@ use bevy::{
     prelude::*,
 };
 
+/// Represents the type of block to generate a mesh for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockType {
+    Cobblestone,
+    Grass,
+}
+
 /// Creates a voxel block mesh with custom vertices, normals, and UV coordinates
 /// mapped to a 2-tile horizontal texture atlas (Left = Cobblestone, Right = Grass).
-pub fn create_block_mesh() -> Mesh {
-    // Correctly initialize the mesh with TriangleList topology and default render asset usages
+pub fn create_block_mesh(block_type: BlockType) -> Mesh {
+    // Initialize the mesh with TriangleList topology and default render asset usages
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -124,49 +131,38 @@ pub fn create_block_mesh() -> Mesh {
         ],
     );
 
-    // 24 texture coordinates. 
-    // Left tile (Cobblestone) is [0.0, 0.5] on the U axis.
-    // Right tile (Grass) is [0.5, 1.0] on the U axis.
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_UV_0,
-        vec![
-            // Front (Cobblestone)
-            [0.0, 1.0],
-            [0.5, 1.0],
-            [0.5, 0.0],
-            [0.0, 0.0],
+    // 24 texture coordinates.
+    // The atlas contains:
+    // - Left half (U: 0.0 to 0.5): Cobblestone texture
+    // - Right half (U: 0.5 to 1.0): Grass texture
+    let cobble_uvs = [
+        [0.0, 1.0], [0.5, 1.0], [0.5, 0.0], [0.0, 0.0]
+    ];
+    let grass_uvs = [
+        [0.5, 1.0], [1.0, 1.0], [1.0, 0.0], [0.5, 0.0]
+    ];
 
-            // Back (Cobblestone)
-            [0.0, 1.0],
-            [0.5, 1.0],
-            [0.5, 0.0],
-            [0.0, 0.0],
+    let uv_vec = match block_type {
+        BlockType::Cobblestone => {
+            // Cobblestone block has Cobblestone texture on all 6 faces
+            let mut uvs = Vec::with_capacity(24);
+            for _ in 0..6 {
+                uvs.extend_from_slice(&cobble_uvs);
+            }
+            uvs
+        }
+        BlockType::Grass => {
+            // Grass block has Grass texture on all 6 faces
+            let mut uvs = Vec::with_capacity(24);
+            for _ in 0..6 {
+                uvs.extend_from_slice(&grass_uvs);
+            }
+            uvs
+        }
+    };
 
-            // Left (Cobblestone)
-            [0.0, 1.0],
-            [0.5, 1.0],
-            [0.5, 0.0],
-            [0.0, 0.0],
-
-            // Right (Cobblestone)
-            [0.0, 1.0],
-            [0.5, 1.0],
-            [0.5, 0.0],
-            [0.0, 0.0],
-
-            // Top (Grass)
-            [0.5, 1.0],
-            [1.0, 1.0],
-            [1.0, 0.0],
-            [0.5, 0.0],
-
-            // Bottom (Cobblestone)
-            [0.0, 1.0],
-            [0.5, 1.0],
-            [0.5, 0.0],
-            [0.0, 0.0],
-        ],
-    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uv_vec);
 
     mesh
-}
+}
+
