@@ -5,17 +5,12 @@ use bevy::prelude::*;
 use bevy::input::mouse::MouseMotion;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
-// Import our custom block mesh creator
-use crate::mesh::{create_block_mesh, BlockType};
+// Import our custom block mesh creator and types
+use crate::mesh::{create_block_mesh, create_chunk_mesh, BlockType};
+use crate::noise::terrain_height;
 
-
-// for add a terrain height
-use crate::world::{
-    spawn_block,
-    terrain_height,
-    Block,
-    BlockAssets,
-};
+// Import chunk structures
+use crate::world::Chunk;
 
 
 #[derive(Component)]
@@ -35,9 +30,7 @@ pub struct CameraView {
 
 
 
-// struct for higlyting the player sellect and break or add block. :)
-#[derive(Component)]
-pub struct SellectBlock;
+
 
 #[derive(Component)]
 pub struct BlockHighlight;
@@ -204,7 +197,7 @@ pub fn lock_cursor(
 pub fn apply_velocity(
     time: Res<Time>,
     mut player: Query<(&mut Transform, &mut Velocity, &mut OnGround), With<Player>>,
-    blocks: Query<&Transform, (With<Block>, Without<Player>)>,
+    chunks: Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
 ) {
     let (mut transform, mut velocity, mut on_ground) = player.single_mut().unwrap();
     let dt = time.delta_secs().min(0.03);
@@ -212,53 +205,86 @@ pub fn apply_velocity(
     on_ground.value = false;
     velocity.value.y = (velocity.value.y - 24.0 * dt).max(-30.0);
 
+    // Collision checking helper function
+    let check_collision_axis = |pos: Vec3, chunks_query: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>| -> Option<Vec3> {
+        for (chunk_transform, chunk) in chunks_query.iter() {
+            let local_pos = pos - chunk_transform.translation;
+            // Check if the player bounding box could overlap this chunk
+            // Chunk AABB is from -0.5 to 15.5 relative to chunk origin.
+            // Player AABB relative to chunk origin is local_pos - half to local_pos + half.
+            let min_local = local_pos - half;
+            let max_local = local_pos + half;
+
+            if max_local.x < -0.5 || min_local.x > 15.5 ||
+               max_local.y < -0.5 || min_local.y > 15.5 ||
+               max_local.z < -0.5 || min_local.z > 15.5 {
+                continue;
+            }
+
+            // Find overlapping block coordinates in chunk local space
+            let start_x = (min_local.x - 0.5).floor().max(0.0).min(15.0) as usize;
+            let end_x = (max_local.x + 0.5).ceil().max(0.0).min(15.0) as usize;
+            let start_y = (min_local.y - 0.5).floor().max(0.0).min(15.0) as usize;
+            let end_y = (max_local.y + 0.5).ceil().max(0.0).min(15.0) as usize;
+            let start_z = (min_local.z - 0.5).floor().max(0.0).min(15.0) as usize;
+            let end_z = (max_local.z + 0.5).ceil().max(0.0).min(15.0) as usize;
+
+            for lx in start_x..=end_x {
+                for ly in start_y..=end_y {
+                    for lz in start_z..=end_z {
+                        let idx = lx + ly * 16 + lz * 256;
+                        if chunk.blocks[idx] != BlockType::Air {
+                            let block_world_pos = chunk_transform.translation + Vec3::new(lx as f32, ly as f32, lz as f32);
+                            let d = pos - block_world_pos;
+                            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
+                                return Some(block_world_pos);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    };
+
     if velocity.value.x != 0.0 {
         transform.translation.x += velocity.value.x * dt;
-        for block in blocks.iter() {
-            let d = transform.translation - block.translation;
-            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.45 && d.z.abs() < half.z + 0.5 {
-                transform.translation.x = block.translation.x - velocity.value.x.signum() * (half.x + 0.5);
-                velocity.value.x = 0.0;
-                break;
-            }
+        if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
+            transform.translation.x = block_world_pos.x - velocity.value.x.signum() * (half.x + 0.5);
+            velocity.value.x = 0.0;
         }
     }
 
     transform.translation.y += velocity.value.y * dt;
-    for block in blocks.iter() {
-        let d = transform.translation - block.translation;
-        if d.x.abs() < half.x + 0.5 && d.y.abs() <= half.y + 0.5 && d.z.abs() < half.z + 0.5 {
-            on_ground.value = velocity.value.y < 0.0;
-            transform.translation.y = block.translation.y - velocity.value.y.signum() * (half.y + 0.5);
-            velocity.value.y = 0.0;
-            break;
-        }
+    if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
+        on_ground.value = velocity.value.y < 0.0;
+        transform.translation.y = block_world_pos.y - velocity.value.y.signum() * (half.y + 0.5);
+        velocity.value.y = 0.0;
     }
 
     if velocity.value.z != 0.0 {
         transform.translation.z += velocity.value.z * dt;
-        for block in blocks.iter() {
-            let d = transform.translation - block.translation;
-            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.45 && d.z.abs() < half.z + 0.5 {
-                transform.translation.z = block.translation.z - velocity.value.z.signum() * (half.z + 0.5);
-                velocity.value.z = 0.0;
-                break;
-            }
+        if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
+            transform.translation.z = block_world_pos.z - velocity.value.z.signum() * (half.z + 0.5);
+            velocity.value.z = 0.0;
         }
     }
 }
+
+#[derive(Resource, Default)]
+pub struct SelectedBlock {
+    pub pos: Option<Vec3>,
+}
+
 pub fn select_block(
-    mut commands: Commands,
     mouse: Res<ButtonInput<MouseButton>>,
-    block_assets: Res<BlockAssets>,
     camera: Query<&GlobalTransform, With<GameCamera>>,
-    blocks: Query<(Entity, &Transform), With<Block>>,
-    player: Query<&Transform, With<Player>>,
-    selected_blocks: Query<Entity, With<SellectBlock>>,
+    mut chunks: Query<(Entity, &Transform, &mut Chunk, &Mesh3d), With<Chunk>>,
+    player: Query<&Transform, (With<Player>, Without<GameCamera>)>,
+    mut selected_block: ResMut<SelectedBlock>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for entity in selected_blocks.iter() {
-        commands.entity(entity).remove::<SellectBlock>();
-    }
+    selected_block.pos = None;
 
     let camera = camera.single().unwrap();
     let forward = camera.forward();
@@ -267,36 +293,87 @@ pub fn select_block(
     let mut last = camera.translation();
     let mut distance = 0.0;
 
+    let player_transform = player.single().unwrap();
+
     while distance <= 6.0 {
         let point = camera.translation() + forward * distance;
-        for (entity, block) in blocks.iter() {
-            let d = point - block.translation;
-            if d.x.abs() <= 0.5 && d.y.abs() <= 0.5 && d.z.abs() <= 0.5 {
-                if left {
-                    commands.entity(entity).despawn();
-                } else {
-                    commands.entity(entity).insert(SellectBlock);
-                    if right {
-                        let place = last.round();
-                        let d = player.single().unwrap().translation - place;
-                        if d.x.abs() >= PLAYER_WIDTH * 0.5 + 0.5 || d.y.abs() >= PLAYER_HEIGHT * 0.5 + 0.5 || d.z.abs() >= PLAYER_WIDTH * 0.5 + 0.5 {
-                            spawn_block(&mut commands, place, block_assets.mesh.clone(), block_assets.material.clone());
+        let block_pos = point.round();
+
+        let chunk_x = (block_pos.x / 16.0).floor() as i32;
+        let chunk_y = (block_pos.y / 16.0).floor() as i32;
+        let chunk_z = (block_pos.z / 16.0).floor() as i32;
+        let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
+
+        let mut hit = false;
+        for (_entity, chunk_transform, mut chunk, mesh3d) in chunks.iter_mut() {
+            let chunk_pos_block = chunk_coord * 16;
+            if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
+                let lx = (block_pos.x as i32 - chunk_pos_block.x) as usize;
+                let ly = (block_pos.y as i32 - chunk_pos_block.y) as usize;
+                let lz = (block_pos.z as i32 - chunk_pos_block.z) as usize;
+
+                if lx < 16 && ly < 16 && lz < 16 {
+                    let idx = lx + ly * 16 + lz * 256;
+                    if chunk.blocks[idx] != BlockType::Air {
+                        hit = true;
+                        selected_block.pos = Some(block_pos);
+
+                        if left {
+                            chunk.blocks[idx] = BlockType::Air;
+                            if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                                *mesh = create_chunk_mesh(&chunk.blocks);
+                            }
+                        } else if right {
+                            let place = last.round();
+                            let d = player_transform.translation - place;
+                            if d.x.abs() >= PLAYER_WIDTH * 0.5 + 0.5 
+                                || d.y.abs() >= PLAYER_HEIGHT * 0.5 + 0.5 
+                                || d.z.abs() >= PLAYER_WIDTH * 0.5 + 0.5 
+                            {
+                                let place_chunk_x = (place.x / 16.0).floor() as i32;
+                                let place_chunk_y = (place.y / 16.0).floor() as i32;
+                                let place_chunk_z = (place.z / 16.0).floor() as i32;
+                                let place_chunk_coord = IVec3::new(place_chunk_x, place_chunk_y, place_chunk_z);
+
+                                for (_place_entity, place_chunk_transform, mut place_chunk, place_mesh3d) in chunks.iter_mut() {
+                                    let place_chunk_pos_block = place_chunk_coord * 16;
+                                    if place_chunk_transform.translation.round().as_ivec3() == place_chunk_pos_block {
+                                        let plx = (place.x as i32 - place_chunk_pos_block.x) as usize;
+                                        let ply = (place.y as i32 - place_chunk_pos_block.y) as usize;
+                                        let plz = (place.z as i32 - place_chunk_pos_block.z) as usize;
+
+                                        if plx < 16 && ply < 16 && plz < 16 {
+                                            let p_idx = plx + ply * 16 + plz * 256;
+                                            place_chunk.blocks[p_idx] = BlockType::Grass;
+                                            if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
+                                                *mesh = create_chunk_mesh(&place_chunk.blocks);
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
                         }
+                        break;
                     }
                 }
-                return;
             }
         }
+
+        if hit {
+            return;
+        }
+
         last = point;
         distance += 0.1;
     }
 }
+
 pub fn setup_block_highlight(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Use the custom block mesh instead of Bevy's built-in Cuboid
     let highlight_mesh = meshes.add(create_block_mesh(BlockType::Grass));
 
     let highlight_material = materials.add(StandardMaterial {
@@ -309,27 +386,25 @@ pub fn setup_block_highlight(
         BlockHighlight,
         Mesh3d(highlight_mesh),
         MeshMaterial3d(highlight_material),
-        // Scale the highlight box to 1.02 to prevent z-fighting with the underlying blocks
         Transform::from_scale(Vec3::splat(1.02)),
         Visibility::Hidden,
     ));
+
+    commands.insert_resource(SelectedBlock::default());
 }
 
-
-// update highy light funct
 pub fn update_block_highlight(
-    selected_blocks: Query<&Transform, With<SellectBlock>>,
+    selected_block: Res<SelectedBlock>,
     mut highlight: Query<
         (&mut Transform, &mut Visibility),
-        (With<BlockHighlight>, Without<SellectBlock>),
+        With<BlockHighlight>,
     >,
 ) {
     let (mut highlight_transform, mut visibility) =
         highlight.single_mut().unwrap();
 
-    if let Ok(selected_transform) = selected_blocks.single() {
-        highlight_transform.translation = selected_transform.translation;
-
+    if let Some(pos) = selected_block.pos {
+        highlight_transform.translation = pos;
         *visibility = Visibility::Visible;
     } else {
         *visibility = Visibility::Hidden;

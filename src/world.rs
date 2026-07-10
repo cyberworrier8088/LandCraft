@@ -1,14 +1,11 @@
 // src/world.rs
 
-
-use crate::mesh::{create_block_mesh, BlockType};
+use crate::mesh::{create_chunk_mesh, BlockType};
+use crate::noise::terrain_height;
 use bevy::prelude::*;
-
-
 
 #[derive(Component)]
 pub struct Block;
-
 
 #[derive(Resource)]
 pub struct BlockAssets {
@@ -16,9 +13,13 @@ pub struct BlockAssets {
     pub material: Handle<StandardMaterial>,
 }
 
+#[derive(Component)]
+pub struct Chunk {
+    pub blocks: [BlockType; 16 * 16 * 16], // An array representing the local volume
+    pub position: IVec3,                  // The chunk's coordinate in world space
+}
 
-
-// function for spawn a block. for player placing and delete.
+// function for spawn a block. (kept for backwards compatibility if needed elsewhere)
 pub fn spawn_block(
     commands: &mut Commands,
     position: Vec3,
@@ -33,67 +34,63 @@ pub fn spawn_block(
     ));
 }
 
-
-
-// function for setup world.
+// function for setup world using chunks.
 pub fn setup_world(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let atlas_texture = asset_server.load("block/200902092053_terrain.png");
 
-    let grass_mesh = meshes.add(create_block_mesh(BlockType::Grass));
-    let stone_mesh = meshes.add(create_block_mesh(BlockType::Cobblestone));
-
-    let atlas_texture = asset_server.load("block/texture_atlas_cobblestone_grass.png");
-
-    let grass = materials.add(StandardMaterial {
-        base_color_texture: Some(atlas_texture.clone()),
-        ..default()
-    });
-
-    let stone = materials.add(StandardMaterial {
+    let block_material = materials.add(StandardMaterial {
         base_color_texture: Some(atlas_texture.clone()),
         ..default()
     });
     
+    // We register BlockAssets for compatibility (e.g. highlight or other queries)
     commands.insert_resource(BlockAssets {
-        mesh: grass_mesh.clone(),
-        material: grass.clone(),
+        mesh: Handle::default(),
+        material: block_material.clone(),
     });
 
-    // it is for creating a 64x64 grid of cubes. 
-    // x is maths 
-    // y is maths :)
-    for x in 0..16 {
-        for z in 0..16 {
-
-            let height = terrain_height(x, z);
-            
-            for y in 0..=height {
-                let is_grass = y == height;
-                spawn_block(
-                    &mut commands,
-
-                    Vec3::new(
-                        x as f32,
-                        y as f32,
-                        z as f32,
-                    ),
-                    if is_grass { grass_mesh.clone() } else { stone_mesh.clone() },
-                    if is_grass { grass.clone() } else { stone.clone() },
-                );
+    // Spawn a 1x2x1 grid of chunks to cover X: 0..16, Z: 0..16, Y: 0..32
+    for cy in 0..2 {
+        let chunk_pos = IVec3::new(0, cy, 0);
+        let mut blocks = [BlockType::Air; 16 * 16 * 16];
+        
+        for lx in 0..16 {
+            for lz in 0..16 {
+                let x_world = lx as i32;
+                let z_world = lz as i32;
+                let height = terrain_height(x_world, z_world);
+                
+                for ly in 0..16 {
+                    let y_world = ly as i32 + cy * 16;
+                    let idx = lx + ly * 16 + lz * 256;
+                    
+                    if y_world < height {
+                        blocks[idx] = BlockType::Cobblestone;
+                    } else if y_world == height {
+                        blocks[idx] = BlockType::Grass;
+                    } else {
+                        blocks[idx] = BlockType::Air;
+                    }
+                }
             }
         }
+        
+        let chunk_mesh = create_chunk_mesh(&blocks);
+        let mesh_handle = meshes.add(chunk_mesh);
+        
+        commands.spawn((
+            Chunk {
+                blocks,
+                position: chunk_pos,
+            },
+            Mesh3d(mesh_handle),
+            MeshMaterial3d(block_material.clone()),
+            Transform::from_translation(chunk_pos.as_vec3() * 16.0),
+        ));
     }
-}
-
-
-// adding terrain
-pub fn terrain_height(x: i32, z: i32) -> i32 {
-    let xf = x as f32 * 0.15;
-    let zf = z as f32 * 0.15;
-
-    ((xf.sin() * 3.0 + zf.cos() * 3.0) + 6.0) as i32
-}
+}

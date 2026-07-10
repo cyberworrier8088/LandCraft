@@ -4,9 +4,13 @@ use bevy::{
     prelude::*,
 };
 
+pub const CHUNK_SIZE: usize = 16;
+
 /// Represents the type of block to generate a mesh for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BlockType {
+    #[default]
+    Air,
     Cobblestone,
     Grass,
 }
@@ -131,20 +135,12 @@ pub fn create_block_mesh(block_type: BlockType) -> Mesh {
         ],
     );
 
-    // 24 texture coordinates.
-    // The atlas contains:
-    // - Left half (U: 0.0 to 0.5): Cobblestone texture
-    // - Right half (U: 0.5 to 1.0): Grass texture
-    let cobble_uvs = [
-        [0.0, 1.0], [0.5, 1.0], [0.5, 0.0], [0.0, 0.0]
-    ];
-    let grass_uvs = [
-        [0.5, 1.0], [1.0, 1.0], [1.0, 0.0], [0.5, 0.0]
-    ];
-
+    // 24 texture coordinates mapped to the 16x16 grid terrain atlas.
     let uv_vec = match block_type {
+        BlockType::Air => vec![[0.0, 0.0]; 24],
         BlockType::Cobblestone => {
-            // Cobblestone block has Cobblestone texture on all 6 faces
+            // Cobblestone/Stone block uses tile at Col 1, Row 0 for all 6 faces
+            let cobble_uvs = get_tile_uvs(1, 0);
             let mut uvs = Vec::with_capacity(24);
             for _ in 0..6 {
                 uvs.extend_from_slice(&cobble_uvs);
@@ -152,7 +148,8 @@ pub fn create_block_mesh(block_type: BlockType) -> Mesh {
             uvs
         }
         BlockType::Grass => {
-            // Grass block has Grass texture on all 6 faces
+            // Grass block uses Grass tile at Col 0, Row 0 for all 6 faces
+            let grass_uvs = get_tile_uvs(0, 0);
             let mut uvs = Vec::with_capacity(24);
             for _ in 0..6 {
                 uvs.extend_from_slice(&grass_uvs);
@@ -165,4 +162,178 @@ pub fn create_block_mesh(block_type: BlockType) -> Mesh {
 
     mesh
 }
+
+/// Helper function to calculate the UV coordinates for a single cube face
+/// mapped to a specific tile coordinates (col, row) in a 16x16 grid.
+fn get_tile_uvs(col: u32, row: u32) -> [[f32; 2]; 4] {
+    let u_min = col as f32 * 0.0625;
+    let u_max = (col + 1) as f32 * 0.0625;
+    let v_min = row as f32 * 0.0625;
+    let v_max = (row + 1) as f32 * 0.0625;
+    [
+        [u_min, v_max], // Bottom-Left
+        [u_max, v_max], // Bottom-Right
+        [u_max, v_min], // Top-Right
+        [u_min, v_min], // Top-Left
+    ]
+}
+
+/// Generates a single combined mesh for an entire chunk using Face Culling.
+/// Faces are only added if the adjacent block in that direction is Air.
+pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE]) -> Mesh {
+    let mut positions = Vec::new();
+    let mut normals = Vec::new();
+    let mut uvs = Vec::new();
+    let mut indices = Vec::new();
+
+    let mut vertex_index = 0;
+
+    let index_fn = |x: usize, y: usize, z: usize| -> usize {
+        x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE
+    };
+
+    let get_block = |x: i32, y: i32, z: i32| -> BlockType {
+        if x < 0 || x >= CHUNK_SIZE as i32 || y < 0 || y >= CHUNK_SIZE as i32 || z < 0 || z >= CHUNK_SIZE as i32 {
+            BlockType::Air
+        } else {
+            blocks[index_fn(x as usize, y as usize, z as usize)]
+        }
+    };
+
+    for lz in 0..CHUNK_SIZE {
+        for ly in 0..CHUNK_SIZE {
+            for lx in 0..CHUNK_SIZE {
+                let block = get_block(lx as i32, ly as i32, lz as i32);
+                if block == BlockType::Air {
+                    continue;
+                }
+
+                let x = lx as f32;
+                let y = ly as f32;
+                let z = lz as f32;
+
+                // Determine tile UVs based on block type
+                let tile_uvs = match block {
+                    BlockType::Cobblestone => get_tile_uvs(1, 0),
+                    BlockType::Grass => get_tile_uvs(0, 0),
+                    BlockType::Air => unreachable!(),
+                };
+
+                // Front (Z = +0.5) - check neighbor (lx, ly, lz + 1)
+                if get_block(lx as i32, ly as i32, lz as i32 + 1) == BlockType::Air {
+                    positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([0.0, 0.0, 1.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+
+                // Back (Z = -0.5) - check neighbor (lx, ly, lz - 1)
+                if get_block(lx as i32, ly as i32, lz as i32 - 1) == BlockType::Air {
+                    positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([0.0, 0.0, -1.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+
+                // Left (X = -0.5) - check neighbor (lx - 1, ly, lz)
+                if get_block(lx as i32 - 1, ly as i32, lz as i32) == BlockType::Air {
+                    positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y, -0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([-1.0, 0.0, 0.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+
+                // Right (X = +0.5) - check neighbor (lx + 1, ly, lz)
+                if get_block(lx as i32 + 1, ly as i32, lz as i32) == BlockType::Air {
+                    positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([1.0, 0.0, 0.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+
+                // Top (Y = +0.5) - check neighbor (lx, ly + 1, lz)
+                if get_block(lx as i32, ly as i32 + 1, lz as i32) == BlockType::Air {
+                    positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y, -0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([0.0, 1.0, 0.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+
+                // Bottom (Y = -0.5) - check neighbor (lx, ly - 1, lz)
+                if get_block(lx as i32, ly as i32 - 1, lz as i32) == BlockType::Air {
+                    positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([0.0, -1.0, 0.0]);
+                    }
+                    uvs.extend_from_slice(&tile_uvs);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                    ]);
+                    vertex_index += 4;
+                }
+            }
+        }
+    }
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
+
 

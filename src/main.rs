@@ -7,6 +7,7 @@ mod exit;
 mod ui;
 mod player_model;
 mod mesh;
+mod noise;
 
 use bevy::prelude::*;
 
