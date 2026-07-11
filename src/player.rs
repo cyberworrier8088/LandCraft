@@ -194,6 +194,142 @@ pub fn lock_cursor(
 }
 
 
+const COLLISION_EPSILON: f32 = 0.001;
+const GROUND_PROXIMITY_THRESHOLD: f32 = 0.05;
+
+fn is_solid_block(
+    pos: IVec3,
+    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+) -> bool {
+    let chunk_coord = IVec3::new(
+        (pos.x as f32 / 16.0).floor() as i32,
+        (pos.y as f32 / 16.0).floor() as i32,
+        (pos.z as f32 / 16.0).floor() as i32,
+    );
+    let chunk_pos_block = chunk_coord * 16;
+    for (chunk_transform, chunk) in chunks.iter() {
+        if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
+            let lx = pos.x - chunk_pos_block.x;
+            let ly = pos.y - chunk_pos_block.y;
+            let lz = pos.z - chunk_pos_block.z;
+            if lx >= 0 && lx < 16 && ly >= 0 && ly < 16 && lz >= 0 && lz < 16 {
+                let idx = (lx as usize) + (ly as usize) * 16 + (lz as usize) * 256;
+                return chunk.blocks[idx] != BlockType::Air;
+            }
+        }
+    }
+    false
+}
+
+fn swept_aabb(
+    p_start: Vec3,
+    half_m: Vec3,
+    dp: Vec3,
+    b_center: Vec3,
+    half_s: Vec3,
+) -> Option<(f32, Vec3)> {
+    let min_target = b_center - (half_s + half_m);
+    let max_target = b_center + (half_s + half_m);
+
+    let mut t_near = f32::NEG_INFINITY;
+    let mut t_far = f32::INFINITY;
+    let mut normal = Vec3::ZERO;
+
+    for i in 0..3 {
+        if dp[i] == 0.0 {
+            if p_start[i] <= min_target[i] || p_start[i] >= max_target[i] {
+                return None;
+            }
+        } else {
+            let mut t1 = (min_target[i] - p_start[i]) / dp[i];
+            let mut t2 = (max_target[i] - p_start[i]) / dp[i];
+
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
+
+            if t1 > t_near {
+                t_near = t1;
+                normal = Vec3::ZERO;
+                normal[i] = if dp[i] > 0.0 { -1.0 } else { 1.0 };
+            }
+            if t2 < t_far {
+                t_far = t2;
+            }
+        }
+    }
+
+    if t_near > t_far {
+        return None;
+    }
+
+    if t_near >= 1.0 || t_far <= 0.0 {
+        return None;
+    }
+
+    let t_hit = t_near.max(0.0);
+    Some((t_hit, normal))
+}
+
+fn raycast_down(
+    origin: Vec3,
+    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+    max_distance: f32,
+) -> Option<f32> {
+    let bx = origin.x.round() as i32;
+    let bz = origin.z.round() as i32;
+    let start_y = origin.y.round() as i32;
+    let end_y = (origin.y - max_distance).round() as i32 - 1;
+
+    let mut highest_y: Option<i32> = None;
+    for by in (end_y..=start_y).rev() {
+        if is_solid_block(IVec3::new(bx, by, bz), chunks) {
+            let top_surface = by as f32 + 0.5;
+            if top_surface <= origin.y {
+                highest_y = Some(by);
+                break;
+            }
+        }
+    }
+
+    if let Some(by) = highest_y {
+        let top_surface = by as f32 + 0.5;
+        let distance = origin.y - top_surface;
+        if distance <= max_distance {
+            return Some(distance);
+        }
+    }
+    None
+}
+
+fn check_grounded(
+    position: Vec3,
+    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+) -> Option<f32> {
+    let max_dist = PLAYER_HEIGHT * 0.5 + GROUND_PROXIMITY_THRESHOLD;
+    if let Some(dist) = raycast_down(position, chunks, max_dist) {
+        return Some(dist);
+    }
+
+    let half_w = PLAYER_WIDTH * 0.5;
+    let offsets = [
+        Vec3::new(-half_w, 0.0, -half_w),
+        Vec3::new(-half_w, 0.0, half_w),
+        Vec3::new(half_w, 0.0, -half_w),
+        Vec3::new(half_w, 0.0, half_w),
+    ];
+
+    let mut min_dist: Option<f32> = None;
+    for offset in offsets {
+        if let Some(dist) = raycast_down(position + offset, chunks, max_dist) {
+            if min_dist.is_none() || dist < min_dist.unwrap() {
+                min_dist = Some(dist);
+            }
+        }
+    }
+    min_dist
+}
+
 pub fn apply_velocity(
     time: Res<Time>,
     mut player: Query<(&mut Transform, &mut Velocity, &mut OnGround), With<Player>>,
@@ -202,73 +338,78 @@ pub fn apply_velocity(
     let (mut transform, mut velocity, mut on_ground) = player.single_mut().unwrap();
     let dt = time.delta_secs().min(0.03);
     let half = Vec3::new(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.5);
-    on_ground.value = false;
+
+    // Apply gravity
     velocity.value.y = (velocity.value.y - 24.0 * dt).max(-30.0);
 
-    // Collision checking helper function
-    let check_collision_axis = |pos: Vec3, chunks_query: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>| -> Option<Vec3> {
-        for (chunk_transform, chunk) in chunks_query.iter() {
-            let local_pos = pos - chunk_transform.translation;
-            // Check if the player bounding box could overlap this chunk
-            // Chunk AABB is from -0.5 to 15.5 relative to chunk origin.
-            // Player AABB relative to chunk origin is local_pos - half to local_pos + half.
-            let min_local = local_pos - half;
-            let max_local = local_pos + half;
+    let mut position = transform.translation;
+    let mut current_velocity = velocity.value;
+    let mut dp = current_velocity * dt;
 
-            if max_local.x < -0.5 || min_local.x > 15.5 ||
-               max_local.y < -0.5 || min_local.y > 15.5 ||
-               max_local.z < -0.5 || min_local.z > 15.5 {
-                continue;
-            }
+    let mut resolved = false;
+    for _iteration in 0..4 {
+        if dp.length_squared() < 1e-8 {
+            resolved = true;
+            break;
+        }
 
-            // Find overlapping block coordinates in chunk local space
-            let start_x = (min_local.x - 0.5).floor().max(0.0).min(15.0) as usize;
-            let end_x = (max_local.x + 0.5).ceil().max(0.0).min(15.0) as usize;
-            let start_y = (min_local.y - 0.5).floor().max(0.0).min(15.0) as usize;
-            let end_y = (max_local.y + 0.5).ceil().max(0.0).min(15.0) as usize;
-            let start_z = (min_local.z - 0.5).floor().max(0.0).min(15.0) as usize;
-            let end_z = (max_local.z + 0.5).ceil().max(0.0).min(15.0) as usize;
+        let min_pos = Vec3::min(position - half, position + dp - half);
+        let max_pos = Vec3::max(position + half, position + dp + half);
 
-            for lx in start_x..=end_x {
-                for ly in start_y..=end_y {
-                    for lz in start_z..=end_z {
-                        let idx = lx + ly * 16 + lz * 256;
-                        if chunk.blocks[idx] != BlockType::Air {
-                            let block_world_pos = chunk_transform.translation + Vec3::new(lx as f32, ly as f32, lz as f32);
-                            let d = pos - block_world_pos;
-                            if d.x.abs() < half.x + 0.5 && d.y.abs() < half.y + 0.5 && d.z.abs() < half.z + 0.5 {
-                                return Some(block_world_pos);
+        let start_x = (min_pos.x - 0.5).floor() as i32 - 1;
+        let end_x = (max_pos.x + 0.5).ceil() as i32 + 1;
+        let start_y = (min_pos.y - 0.5).floor() as i32 - 1;
+        let end_y = (max_pos.y + 0.5).ceil() as i32 + 1;
+        let start_z = (min_pos.z - 0.5).floor() as i32 - 1;
+        let end_z = (max_pos.z + 0.5).ceil() as i32 + 1;
+
+        let mut earliest_collision: Option<(f32, Vec3)> = None;
+
+        for bx in start_x..=end_x {
+            for by in start_y..=end_y {
+                for bz in start_z..=end_z {
+                    if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                        let b_center = Vec3::new(bx as f32, by as f32, bz as f32);
+                        let half_s = Vec3::splat(0.5);
+                        if let Some((t, normal)) = swept_aabb(position, half, dp, b_center, half_s) {
+                            if earliest_collision.is_none() || t < earliest_collision.unwrap().0 {
+                                earliest_collision = Some((t, normal));
                             }
                         }
                     }
                 }
             }
         }
-        None
-    };
 
-    if velocity.value.x != 0.0 {
-        transform.translation.x += velocity.value.x * dt;
-        if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
-            transform.translation.x = block_world_pos.x - velocity.value.x.signum() * (half.x + 0.5);
-            velocity.value.x = 0.0;
+        if let Some((t, normal)) = earliest_collision {
+            position = position + dp * t + normal * COLLISION_EPSILON;
+
+            let dp_remaining = dp * (1.0 - t);
+            dp = dp_remaining - dp_remaining.dot(normal) * normal;
+            current_velocity = current_velocity - current_velocity.dot(normal) * normal;
+        } else {
+            position += dp;
+            resolved = true;
+            break;
         }
     }
 
-    transform.translation.y += velocity.value.y * dt;
-    if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
-        on_ground.value = velocity.value.y < 0.0;
-        transform.translation.y = block_world_pos.y - velocity.value.y.signum() * (half.y + 0.5);
-        velocity.value.y = 0.0;
+    if !resolved {
+        position += dp;
     }
 
-    if velocity.value.z != 0.0 {
-        transform.translation.z += velocity.value.z * dt;
-        if let Some(block_world_pos) = check_collision_axis(transform.translation, &chunks) {
-            transform.translation.z = block_world_pos.z - velocity.value.z.signum() * (half.z + 0.5);
-            velocity.value.z = 0.0;
+    let mut grounded = false;
+    if current_velocity.y <= 0.0 {
+        if let Some(dist) = check_grounded(position, &chunks) {
+            grounded = true;
+            current_velocity.y = 0.0;
+            position.y = position.y - dist + (PLAYER_HEIGHT * 0.5);
         }
     }
+
+    on_ground.value = grounded;
+    velocity.value = current_velocity;
+    transform.translation = position;
 }
 
 #[derive(Resource, Default)]

@@ -10,4 +10,7 @@ pub fn close_on_escape(
     if keyboard.just_pressed(KeyCode::Escape) {
         exit.write(AppExit::Success);
     }
+
+
+    
 }
