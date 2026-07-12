@@ -5,12 +5,16 @@ use bevy::prelude::*;
 use bevy::input::mouse::MouseMotion;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
-// Import our custom block mesh creator and types
+// import our custom block mesh creator and types
 use crate::mesh::{create_block_mesh, create_chunk_mesh, BlockType};
 use crate::noise::terrain_height;
 
-// Import chunk structures
+// import chunk structures
 use crate::world::Chunk;
+
+// import inventory
+use crate::inventory::Inventory;
+
 
 
 #[derive(Component)]
@@ -424,6 +428,7 @@ pub fn select_block(
     player: Query<&Transform, (With<Player>, Without<GameCamera>)>,
     mut selected_block: ResMut<SelectedBlock>,
     mut meshes: ResMut<Assets<Mesh>>,
+    inventory: Res<Inventory>,
 ) {
     selected_block.pos = None;
 
@@ -485,7 +490,9 @@ pub fn select_block(
 
                                         if plx < 16 && ply < 16 && plz < 16 {
                                             let p_idx = plx + ply * 16 + plz * 256;
-                                            place_chunk.blocks[p_idx] = BlockType::Grass;
+                                            if let Some(block) = inventory.slots[inventory.selected_slot] {
+                                                place_chunk.blocks[p_idx] = block;
+                                            }
                                             if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
                                                 *mesh = create_chunk_mesh(&place_chunk.blocks);
                                             }

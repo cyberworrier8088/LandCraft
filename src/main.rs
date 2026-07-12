@@ -8,14 +8,18 @@ mod ui;
 mod player_model;
 mod mesh;
 mod noise;
+mod inventory;
+
 
 use bevy::prelude::*;
 
 fn main() {
 
-    App::new().add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight, player_model::setup_player_model,))
+    App::new().insert_resource(world::LoadedChunks::default()).insert_resource(inventory::Inventory::default()).add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, player::setup_block_highlight, player_model::setup_player_model,))
     .add_systems(
         Update, (
+            inventory::change_selected_slot,
+            world::update_chunks,
             (
                 player::mouse_look,
                 player::player_movement,
