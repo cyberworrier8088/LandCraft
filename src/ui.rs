@@ -34,3 +34,30 @@ pub fn setup_crosshair(
 
 
 }
+
+
+#[derive(Component)]
+pub struct Hotbar;
+
+
+pub fn setup_hotbar(
+    mut commands: Commands,
+) {
+    commands.spawn((
+        Hotbar,
+        Node {
+            position_type: PositionType::Absolute,
+
+            bottom: Val::Px(20.0),
+
+            left: Val::Percent(50.0),
+
+            width: Val::Px(450.0),
+            height: Val::Px(50.0),
+
+            ..default()
+        },
+
+        BackgroundColor(Color::srgb(0.18, 0.12, 0.08)),
+    ));
+}
