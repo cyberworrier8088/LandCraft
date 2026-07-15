@@ -12,10 +12,18 @@ mod inventory;
 
 
 use bevy::prelude::*;
+use bevy_embedded_assets::EmbeddedAssetPlugin;
 
 fn main() {
 
-    App::new().insert_resource(world::LoadedChunks::default()).insert_resource(inventory::Inventory::default()).add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())).add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, ui::setup_hotbar, player::setup_block_highlight, player_model::setup_player_model,))
+    App::new()
+        .insert_resource(world::LoadedChunks::default())
+        .insert_resource(inventory::Inventory::default())
+        .add_plugins((
+            EmbeddedAssetPlugin::default(),
+            DefaultPlugins.set(ImagePlugin::default_nearest()),
+        ))
+        .add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, ui::setup_hotbar, player::setup_block_highlight, player_model::setup_player_model,))
     .add_systems(
         Update, (
             ui::update_hotbar,
