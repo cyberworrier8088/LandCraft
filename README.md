@@ -1,6 +1,6 @@
 # LandCraft
 
-# 🌍 LandCraft
+# LandCraft
 
 A Minecraft-inspired voxel sandbox game written in **Rust** using the **Bevy Engine**.
 
@@ -10,29 +10,29 @@ LandCraft is an open-source voxel game focused on learning game engine developme
 
 ---
 
-## 📸 Screenshot
+## Screenshot :)
 
-> Coming Soon
+> Coming Soon (because this was devlopment)
 
 ---
 
-## ✨ Features
+## Features
 
-### 🌎 Procedural World
+### Procedural World
 - Infinite-style chunk loading
 - Procedural terrain generation
 - Perlin Noise terrain
 - Grass and Cobblestone blocks
 - Dynamic chunk generation around the player
 
-### ⛏️ Blocks
+### Blocks
 - Break blocks
 - Place blocks
 - Block selection highlight
 - Texture atlas rendering
 - Face culling optimized chunk meshes
 
-### 🚶 Player
+### Player
 - First Person Camera
 - Third Person Camera (F2)
 - Smooth movement
@@ -42,18 +42,18 @@ LandCraft is an open-source voxel game focused on learning game engine developme
 - Mouse look
 - Cursor locking
 
-### 🎒 Inventory
+### Inventory
 - 9-slot hotbar
 - Block selection
 - Keyboard controls (1-9)
 - UI icons
 
-### 🎮 UI
+### UI
 - Crosshair
 - Hotbar
 - Selected slot highlight
 
-### 👤 Player Model
+### Player Model
 - Animated player
 - Idle animation
 - Running animation
@@ -61,22 +61,7 @@ LandCraft is an open-source voxel game focused on learning game engine developme
 
 ---
 
-# 🎮 Controls
-
-| Key | Action |
-|------|--------|
-| W A S D | Move |
-| Mouse | Look Around |
-| Space | Jump |
-| Left Click | Break Block |
-| Right Click | Place Block |
-| 1-9 | Select Hotbar Slot |
-| F2 | Toggle First/Third Person |
-| Esc | Quit Game |
-
----
-
-# 🛠️ Built With
+# Built With
 
 - Rust
 - Bevy Engine
@@ -84,7 +69,7 @@ LandCraft is an open-source voxel game focused on learning game engine developme
 
 ---
 
-# 📁 Project Structure
+# Project Structure
 
 ```
 src/
@@ -102,12 +87,12 @@ src/
 
 ---
 
-# 🚀 Getting Started
+# Getting Started
 
 ## Clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/LandCraft.git
+git clone https://github.com/cyberworrier8088/LandCraft.git
 ```
 
 ## Enter Project
@@ -197,3 +182,6 @@ Development is active, and many more features are planned.
 ---
 
 Made with in Rust.
+
+
+This is underdevlopment
