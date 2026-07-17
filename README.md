@@ -47,50 +47,18 @@ cargo run
 
 ---
 
-#  Contributing
-
-Contributions are welcome!
-
-Feel free to open issues or submit pull requests.
-
----
-
-#  License
-
-This project is licensed under the MIT License.
-
 ___
 
 # Version
 
-```
 LandCraft v0.1 Beta
-```
 
-### Current Status
 
-Playable
 
-Implemented:
+Theme: endless: You can play infinitly. This game world have no end like minecarft. This game you jump in void that void inside Genarte world. You cannot die current version. And you travel endless.
 
-- Procedural terrain
-- Chunk generation
-- Player movement
-- Collision system
-- Inventory
-- Block placing
-- Block breaking
-- Animated player
-- First & Third person camera
-- Crosshair
-- Hotbar
-- Procedural terrain generation
 
-Development is active, and many more features are planned.
 
----
-
-Made with in Rust.
 
 
 This is underdevlopment
