@@ -25,13 +25,12 @@ LandCraft is an open-source voxel game focused on learning game engine developme
 git clone https://github.com/cyberworrier8088/LandCraft.git
 ```
 
-## Enter Project
+
 
 ```bash
 cd LandCraft
 ```
 
-## Run
 
 ```bash
 cargo run
