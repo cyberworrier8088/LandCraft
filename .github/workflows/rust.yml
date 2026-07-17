@@ -1,0 +1,94 @@
+name: Production CI & Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ] # Triggers the release flow when you push a tag like v1.0.0
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Replace 'landcraft' with your exact binary name from Cargo.toml if different
+  BINARY_NAME: landcraft 
+
+jobs:
+  # -------------------------------------------------------------
+  # Job 1: Quality Control (Runs on every Push and Pull Request)
+  # -------------------------------------------------------------
+  test:
+    name: Verify Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Enable Rust caching
+        uses: swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy linter
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run test suite
+        run: cargo test --verbose
+
+  # -------------------------------------------------------------
+  # Job 2: Pro Release (Runs ONLY on tags, AFTER tests pass)
+  # -------------------------------------------------------------
+  release:
+    name: Production Release Bundle
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Grants permissions to create the release and upload assets
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Cross-Compilation Tools
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build Production Optimized Binary
+        # Uses cross to compile a statically linked binary for maximum Linux compatibility
+        run: cross build --target x86_64-unknown-linux-musl --release --locked
+
+      - name: Package Production Zip Bundle
+        # Creates a professional staging folder containing the binary and your game assets
+        run: |
+          mkdir -p dist/assets
+          
+          # Copy the static binary to our release folder
+          cp target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} dist/
+          
+          # Copy the game assets directory into the bundle
+          if [ -d "assets" ]; then
+            cp -r assets/* dist/assets/
+          else
+            echo "Warning: assets folder not found, creating an empty assets folder instead."
+          fi
+          
+          # Create a clean zip file of the entire dist directory contents
+          cd dist
+          zip -r ../${{ env.BINARY_NAME }}-linux-x64.zip ./*
+
+      - name: Publish Production GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BINARY_NAME }}-linux-x64.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
