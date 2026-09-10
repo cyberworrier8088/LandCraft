@@ -59,5 +59,4 @@ pub fn change_selected_slot(
     if keyboard.just_pressed(KeyCode::Digit9) {
         inventory.selected_slot = 8;
     }
-    println!("Selected slot: {}", inventory.selected_slot);
 }

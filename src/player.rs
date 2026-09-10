@@ -129,7 +129,9 @@ pub fn player_movement(
     time: Res<Time>,
     mut player: Query<(&Transform, &mut Velocity, &OnGround), With<Player>>,
 ) {
-    let (transform, mut velocity, on_ground) = player.single_mut().unwrap();
+    let Ok((transform, mut velocity, on_ground)) = player.single_mut() else {
+        return;
+    };
     let mut direction = Vec3::ZERO;
     let mut forward = *transform.forward();
     forward.y = 0.0;
@@ -180,8 +182,12 @@ pub fn mouse_look(
         return;
     }
 
-    let (mut player_transform, mut angles) = player.single_mut().unwrap();
-    let mut pivot_transform = pivot.single_mut().unwrap();
+    let Ok((mut player_transform, mut angles)) = player.single_mut() else {
+        return;
+    };
+    let Ok(mut pivot_transform) = pivot.single_mut() else {
+        return;
+    };
 
     angles.yaw -= delta.x * 0.0025;
     angles.pitch = (angles.pitch - delta.y * 0.0025).clamp(-1.54, 1.54);
@@ -198,142 +204,29 @@ pub fn lock_cursor(
 }
 
 
-const COLLISION_EPSILON: f32 = 0.001;
-const GROUND_PROXIMITY_THRESHOLD: f32 = 0.05;
-
 type ChunkQuery<'w, 's> = Query<'w, 's, (&'static Transform, &'static Chunk), (Without<Player>, With<Chunk>)>;
 
-fn is_solid_block(
-    pos: IVec3,
-    chunks: &ChunkQuery,
-) -> bool {
+fn to_block(v: f32) -> i32 {
+    (v + 0.5).floor() as i32
+}
+
+fn is_solid_block(pos: IVec3, chunks: &ChunkQuery) -> bool {
     let chunk_coord = IVec3::new(
-        (pos.x as f32 / 16.0).floor() as i32,
-        (pos.y as f32 / 16.0).floor() as i32,
-        (pos.z as f32 / 16.0).floor() as i32,
+        pos.x.div_euclid(16),
+        pos.y.div_euclid(16),
+        pos.z.div_euclid(16),
     );
     let chunk_pos_block = chunk_coord * 16;
     for (chunk_transform, chunk) in chunks.iter() {
         if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
-            let lx = pos.x - chunk_pos_block.x;
-            let ly = pos.y - chunk_pos_block.y;
-            let lz = pos.z - chunk_pos_block.z;
-            if (0..16).contains(&lx) && (0..16).contains(&ly) && (0..16).contains(&lz) {
-                let idx = (lx as usize) + (ly as usize) * 16 + (lz as usize) * 256;
-                return chunk.blocks[idx] != BlockType::Air;
-            }
+            let lx = pos.x.rem_euclid(16) as usize;
+            let ly = pos.y.rem_euclid(16) as usize;
+            let lz = pos.z.rem_euclid(16) as usize;
+            let idx = lx + ly * 16 + lz * 256;
+            return chunk.blocks[idx] != BlockType::Air;
         }
     }
     false
-}
-
-fn swept_aabb(
-    p_start: Vec3,
-    half_m: Vec3,
-    dp: Vec3,
-    b_center: Vec3,
-    half_s: Vec3,
-) -> Option<(f32, Vec3)> {
-    let min_target = b_center - (half_s + half_m);
-    let max_target = b_center + (half_s + half_m);
-
-    let mut t_near = f32::NEG_INFINITY;
-    let mut t_far = f32::INFINITY;
-    let mut normal = Vec3::ZERO;
-
-    for i in 0..3 {
-        if dp[i] == 0.0 {
-            if p_start[i] <= min_target[i] || p_start[i] >= max_target[i] {
-                return None;
-            }
-        } else {
-            let mut t1 = (min_target[i] - p_start[i]) / dp[i];
-            let mut t2 = (max_target[i] - p_start[i]) / dp[i];
-
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-
-            if t1 > t_near {
-                t_near = t1;
-                normal = Vec3::ZERO;
-                normal[i] = if dp[i] > 0.0 { -1.0 } else { 1.0 };
-            }
-            if t2 < t_far {
-                t_far = t2;
-            }
-        }
-    }
-
-    if t_near > t_far {
-        return None;
-    }
-
-    if t_near >= 1.0 || t_far <= 0.0 {
-        return None;
-    }
-
-    let t_hit = t_near.max(0.0);
-    Some((t_hit, normal))
-}
-
-fn raycast_down(
-    origin: Vec3,
-    chunks: &ChunkQuery,
-    max_distance: f32,
-) -> Option<f32> {
-    let bx = origin.x.round() as i32;
-    let bz = origin.z.round() as i32;
-    let start_y = origin.y.round() as i32;
-    let end_y = (origin.y - max_distance).round() as i32 - 1;
-
-    let mut highest_y: Option<i32> = None;
-    for by in (end_y..=start_y).rev() {
-        if is_solid_block(IVec3::new(bx, by, bz), chunks) {
-            let top_surface = by as f32 + 0.5;
-            if top_surface <= origin.y {
-                highest_y = Some(by);
-                break;
-            }
-        }
-    }
-
-    if let Some(by) = highest_y {
-        let top_surface = by as f32 + 0.5;
-        let distance = origin.y - top_surface;
-        if distance <= max_distance {
-            return Some(distance);
-        }
-    }
-    None
-}
-
-fn check_grounded(
-    position: Vec3,
-    chunks: &ChunkQuery,
-) -> Option<f32> {
-    let max_dist = PLAYER_HEIGHT * 0.5 + GROUND_PROXIMITY_THRESHOLD;
-    if let Some(dist) = raycast_down(position, chunks, max_dist) {
-        return Some(dist);
-    }
-
-    let half_w = PLAYER_WIDTH * 0.5;
-    let offsets = [
-        Vec3::new(-half_w, 0.0, -half_w),
-        Vec3::new(-half_w, 0.0, half_w),
-        Vec3::new(half_w, 0.0, -half_w),
-        Vec3::new(half_w, 0.0, half_w),
-    ];
-
-    let mut min_dist: Option<f32> = None;
-    for offset in offsets {
-        if let Some(dist) = raycast_down(position + offset, chunks, max_dist)
-            && (min_dist.is_none() || dist < min_dist.unwrap())
-        {
-            min_dist = Some(dist);
-        }
-    }
-    min_dist
 }
 
 pub fn apply_velocity(
@@ -352,67 +245,226 @@ pub fn apply_velocity(
 
     let mut position = transform.translation;
     let mut current_velocity = velocity.value;
-    let mut dp = current_velocity * dt;
-
-    let mut resolved = false;
-    for _iteration in 0..4 {
-        if dp.length_squared() < 1e-8 {
-            resolved = true;
-            break;
-        }
-
-        let min_pos = Vec3::min(position - half, position + dp - half);
-        let max_pos = Vec3::max(position + half, position + dp + half);
-
-        let start_x = (min_pos.x - 0.5).floor() as i32 - 1;
-        let end_x = (max_pos.x + 0.5).ceil() as i32 + 1;
-        let start_y = (min_pos.y - 0.5).floor() as i32 - 1;
-        let end_y = (max_pos.y + 0.5).ceil() as i32 + 1;
-        let start_z = (min_pos.z - 0.5).floor() as i32 - 1;
-        let end_z = (max_pos.z + 0.5).ceil() as i32 + 1;
-
-        let mut earliest_collision: Option<(f32, Vec3)> = None;
-
-        for bx in start_x..=end_x {
-            for by in start_y..=end_y {
-                for bz in start_z..=end_z {
-                    if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
-                        let b_center = Vec3::new(bx as f32, by as f32, bz as f32);
-                        let half_s = Vec3::splat(0.5);
-                        if let Some((t, normal)) = swept_aabb(position, half, dp, b_center, half_s)
-                            && (earliest_collision.is_none() || t < earliest_collision.unwrap().0)
-                        {
-                            earliest_collision = Some((t, normal));
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some((t, normal)) = earliest_collision {
-            position = position + dp * t + normal * COLLISION_EPSILON;
-
-            let dp_remaining = dp * (1.0 - t);
-            dp = dp_remaining - dp_remaining.dot(normal) * normal;
-            current_velocity = current_velocity - current_velocity.dot(normal) * normal;
-        } else {
-            position += dp;
-            resolved = true;
-            break;
-        }
-    }
-
-    if !resolved {
-        position += dp;
-    }
+    let dp = current_velocity * dt;
 
     let mut grounded = false;
-    if current_velocity.y <= 0.0
-        && let Some(dist) = check_grounded(position, &chunks)
-    {
-        grounded = true;
-        current_velocity.y = 0.0;
-        position.y = position.y - dist + (PLAYER_HEIGHT * 0.5);
+    const EPS: f32 = 0.001;
+
+    // 1. Vertical resolution (Y axis)
+    if dp.y != 0.0 {
+        let min_x = to_block(position.x - half.x + EPS);
+        let max_x = to_block(position.x + half.x - EPS);
+        let min_z = to_block(position.z - half.z + EPS);
+        let max_z = to_block(position.z + half.z - EPS);
+
+        if dp.y < 0.0 {
+            let start_by = to_block(position.y - half.y - EPS);
+            let target_by = to_block(position.y + dp.y - half.y);
+            let mut hit_top: Option<f32> = None;
+
+            for by in (target_by..=start_by).rev() {
+                for bx in min_x..=max_x {
+                    for bz in min_z..=max_z {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_top = Some(by as f32 + 0.5);
+                            break;
+                        }
+                    }
+                    if hit_top.is_some() {
+                        break;
+                    }
+                }
+                if hit_top.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(top) = hit_top {
+                position.y = top + half.y;
+                current_velocity.y = 0.0;
+                grounded = true;
+            } else {
+                position.y += dp.y;
+            }
+        } else {
+            let start_by = to_block(position.y + half.y + EPS);
+            let target_by = to_block(position.y + dp.y + half.y);
+            let mut hit_bottom: Option<f32> = None;
+
+            for by in start_by..=target_by {
+                for bx in min_x..=max_x {
+                    for bz in min_z..=max_z {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_bottom = Some(by as f32 - 0.5);
+                            break;
+                        }
+                    }
+                    if hit_bottom.is_some() {
+                        break;
+                    }
+                }
+                if hit_bottom.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(bottom) = hit_bottom {
+                position.y = bottom - half.y;
+                current_velocity.y = 0.0;
+            } else {
+                position.y += dp.y;
+            }
+        }
+    } else {
+        let min_x = to_block(position.x - half.x + EPS);
+        let max_x = to_block(position.x + half.x - EPS);
+        let min_z = to_block(position.z - half.z + EPS);
+        let max_z = to_block(position.z + half.z - EPS);
+        let check_by = to_block(position.y - half.y - 0.05);
+
+        for bx in min_x..=max_x {
+            for bz in min_z..=max_z {
+                if is_solid_block(IVec3::new(bx, check_by, bz), &chunks) {
+                    grounded = true;
+                    break;
+                }
+            }
+            if grounded {
+                break;
+            }
+        }
+    }
+
+    // 2. Horizontal resolution (X axis)
+    if dp.x != 0.0 {
+        let min_y = to_block(position.y - half.y + EPS);
+        let max_y = to_block(position.y + half.y - EPS);
+        let min_z = to_block(position.z - half.z + EPS);
+        let max_z = to_block(position.z + half.z - EPS);
+
+        if dp.x < 0.0 {
+            let start_bx = to_block(position.x - half.x - EPS);
+            let target_bx = to_block(position.x + dp.x - half.x);
+            let mut hit_right: Option<f32> = None;
+
+            for bx in (target_bx..=start_bx).rev() {
+                for by in min_y..=max_y {
+                    for bz in min_z..=max_z {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_right = Some(bx as f32 + 0.5);
+                            break;
+                        }
+                    }
+                    if hit_right.is_some() {
+                        break;
+                    }
+                }
+                if hit_right.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(right) = hit_right {
+                position.x = right + half.x;
+                current_velocity.x = 0.0;
+            } else {
+                position.x += dp.x;
+            }
+        } else {
+            let start_bx = to_block(position.x + half.x + EPS);
+            let target_bx = to_block(position.x + dp.x + half.x);
+            let mut hit_left: Option<f32> = None;
+
+            for bx in start_bx..=target_bx {
+                for by in min_y..=max_y {
+                    for bz in min_z..=max_z {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_left = Some(bx as f32 - 0.5);
+                            break;
+                        }
+                    }
+                    if hit_left.is_some() {
+                        break;
+                    }
+                }
+                if hit_left.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(left) = hit_left {
+                position.x = left - half.x;
+                current_velocity.x = 0.0;
+            } else {
+                position.x += dp.x;
+            }
+        }
+    }
+
+    // 3. Horizontal resolution (Z axis)
+    if dp.z != 0.0 {
+        let min_x = to_block(position.x - half.x + EPS);
+        let max_x = to_block(position.x + half.x - EPS);
+        let min_y = to_block(position.y - half.y + EPS);
+        let max_y = to_block(position.y + half.y - EPS);
+
+        if dp.z < 0.0 {
+            let start_bz = to_block(position.z - half.z - EPS);
+            let target_bz = to_block(position.z + dp.z - half.z);
+            let mut hit_front: Option<f32> = None;
+
+            for bz in (target_bz..=start_bz).rev() {
+                for bx in min_x..=max_x {
+                    for by in min_y..=max_y {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_front = Some(bz as f32 + 0.5);
+                            break;
+                        }
+                    }
+                    if hit_front.is_some() {
+                        break;
+                    }
+                }
+                if hit_front.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(front) = hit_front {
+                position.z = front + half.z;
+                current_velocity.z = 0.0;
+            } else {
+                position.z += dp.z;
+            }
+        } else {
+            let start_bz = to_block(position.z + half.z + EPS);
+            let target_bz = to_block(position.z + dp.z + half.z);
+            let mut hit_back: Option<f32> = None;
+
+            for bz in start_bz..=target_bz {
+                for bx in min_x..=max_x {
+                    for by in min_y..=max_y {
+                        if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
+                            hit_back = Some(bz as f32 - 0.5);
+                            break;
+                        }
+                    }
+                    if hit_back.is_some() {
+                        break;
+                    }
+                }
+                if hit_back.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(back) = hit_back {
+                position.z = back - half.z;
+                current_velocity.z = 0.0;
+            } else {
+                position.z += dp.z;
+            }
+        }
     }
 
     on_ground.value = grounded;
@@ -436,14 +488,18 @@ pub fn select_block(
 ) {
     selected_block.pos = None;
 
-    let camera = camera.single().unwrap();
+    let Ok(camera) = camera.single() else {
+        return;
+    };
+    let Ok(player_transform) = player.single() else {
+        return;
+    };
+
     let forward = camera.forward();
     let left = mouse.just_pressed(MouseButton::Left);
     let right = mouse.just_pressed(MouseButton::Right);
     let mut last = camera.translation();
     let mut distance = 0.0;
-
-    let player_transform = player.single().unwrap();
 
     while distance <= 6.0 {
         let point = camera.translation() + forward * distance;
