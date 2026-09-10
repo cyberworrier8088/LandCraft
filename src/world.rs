@@ -9,12 +9,8 @@ use bevy::prelude::*;
 use std::collections::HashSet;
 
 
-#[derive(Component)]
-pub struct Block;
-
 #[derive(Resource)]
 pub struct BlockAssets {
-    pub mesh: Handle<Mesh>,
     pub material: Handle<StandardMaterial>,
 }
 
@@ -23,26 +19,9 @@ pub struct LoadedChunks {
     pub chunks: HashSet<IVec3>,
 }
 
-
 #[derive(Component)]
 pub struct Chunk {
     pub blocks: [BlockType; 16 * 16 * 16], // An array representing the local volume
-    pub position: IVec3,                  // The chunk's coordinate in world space
-}
-
-// function for spawn a block. (kept for backwards compatibility if needed elsewhere)
-pub fn spawn_block(
-    commands: &mut Commands,
-    position: Vec3,
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-) {
-    commands.spawn((
-        Block,
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        Transform::from_translation(position),
-    ));
 }
 
 // function for setup world using chunks.
@@ -61,7 +40,6 @@ pub fn setup_world(
     
     // We register BlockAssets for compatibility (e.g. highlight or other queries)
     commands.insert_resource(BlockAssets {
-        mesh: Handle::default(),
         material: block_material.clone(),
     });
 
@@ -131,7 +109,6 @@ pub fn spawn_chunk(
     commands.spawn((
         Chunk {
             blocks,
-            position: chunk_pos,
         },
         Mesh3d(mesh_handle),
         MeshMaterial3d(block_material.clone()),
@@ -143,12 +120,14 @@ pub fn spawn_chunk(
 
 pub fn update_chunks(
     player: Query<&Transform, With<Player>>,
-    mut LoadedChunks: ResMut<LoadedChunks>,
+    mut loaded_chunks: ResMut<LoadedChunks>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     block_assets: Res<BlockAssets>,
 ) {
-    let player_transform = player.single().unwrap();
+    let Ok(player_transform) = player.single() else {
+        return;
+    };
 
     let player_chunk = world_to_chunk(player_transform.translation);
 
@@ -159,7 +138,7 @@ pub fn update_chunks(
 
             let chunk_pos = player_chunk + IVec3::new(x, 0, z);
 
-            if !LoadedChunks.chunks.contains(&chunk_pos) {
+            if !loaded_chunks.chunks.contains(&chunk_pos) {
                 spawn_chunk(
                     &mut commands,
                     &mut meshes,
@@ -167,7 +146,7 @@ pub fn update_chunks(
                     chunk_pos,
                 );
 
-                LoadedChunks.chunks.insert(chunk_pos);
+                loaded_chunks.chunks.insert(chunk_pos);
             }
         }
     }

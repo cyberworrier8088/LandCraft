@@ -201,9 +201,11 @@ pub fn lock_cursor(
 const COLLISION_EPSILON: f32 = 0.001;
 const GROUND_PROXIMITY_THRESHOLD: f32 = 0.05;
 
+type ChunkQuery<'w, 's> = Query<'w, 's, (&'static Transform, &'static Chunk), (Without<Player>, With<Chunk>)>;
+
 fn is_solid_block(
     pos: IVec3,
-    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+    chunks: &ChunkQuery,
 ) -> bool {
     let chunk_coord = IVec3::new(
         (pos.x as f32 / 16.0).floor() as i32,
@@ -216,7 +218,7 @@ fn is_solid_block(
             let lx = pos.x - chunk_pos_block.x;
             let ly = pos.y - chunk_pos_block.y;
             let lz = pos.z - chunk_pos_block.z;
-            if lx >= 0 && lx < 16 && ly >= 0 && ly < 16 && lz >= 0 && lz < 16 {
+            if (0..16).contains(&lx) && (0..16).contains(&ly) && (0..16).contains(&lz) {
                 let idx = (lx as usize) + (ly as usize) * 16 + (lz as usize) * 256;
                 return chunk.blocks[idx] != BlockType::Air;
             }
@@ -277,7 +279,7 @@ fn swept_aabb(
 
 fn raycast_down(
     origin: Vec3,
-    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+    chunks: &ChunkQuery,
     max_distance: f32,
 ) -> Option<f32> {
     let bx = origin.x.round() as i32;
@@ -308,7 +310,7 @@ fn raycast_down(
 
 fn check_grounded(
     position: Vec3,
-    chunks: &Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+    chunks: &ChunkQuery,
 ) -> Option<f32> {
     let max_dist = PLAYER_HEIGHT * 0.5 + GROUND_PROXIMITY_THRESHOLD;
     if let Some(dist) = raycast_down(position, chunks, max_dist) {
@@ -325,10 +327,10 @@ fn check_grounded(
 
     let mut min_dist: Option<f32> = None;
     for offset in offsets {
-        if let Some(dist) = raycast_down(position + offset, chunks, max_dist) {
-            if min_dist.is_none() || dist < min_dist.unwrap() {
-                min_dist = Some(dist);
-            }
+        if let Some(dist) = raycast_down(position + offset, chunks, max_dist)
+            && (min_dist.is_none() || dist < min_dist.unwrap())
+        {
+            min_dist = Some(dist);
         }
     }
     min_dist
@@ -337,9 +339,11 @@ fn check_grounded(
 pub fn apply_velocity(
     time: Res<Time>,
     mut player: Query<(&mut Transform, &mut Velocity, &mut OnGround), With<Player>>,
-    chunks: Query<(&Transform, &Chunk), (Without<Player>, With<Chunk>)>,
+    chunks: ChunkQuery,
 ) {
-    let (mut transform, mut velocity, mut on_ground) = player.single_mut().unwrap();
+    let Ok((mut transform, mut velocity, mut on_ground)) = player.single_mut() else {
+        return;
+    };
     let dt = time.delta_secs().min(0.03);
     let half = Vec3::new(PLAYER_WIDTH * 0.5, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.5);
 
@@ -375,10 +379,10 @@ pub fn apply_velocity(
                     if is_solid_block(IVec3::new(bx, by, bz), &chunks) {
                         let b_center = Vec3::new(bx as f32, by as f32, bz as f32);
                         let half_s = Vec3::splat(0.5);
-                        if let Some((t, normal)) = swept_aabb(position, half, dp, b_center, half_s) {
-                            if earliest_collision.is_none() || t < earliest_collision.unwrap().0 {
-                                earliest_collision = Some((t, normal));
-                            }
+                        if let Some((t, normal)) = swept_aabb(position, half, dp, b_center, half_s)
+                            && (earliest_collision.is_none() || t < earliest_collision.unwrap().0)
+                        {
+                            earliest_collision = Some((t, normal));
                         }
                     }
                 }
@@ -403,12 +407,12 @@ pub fn apply_velocity(
     }
 
     let mut grounded = false;
-    if current_velocity.y <= 0.0 {
-        if let Some(dist) = check_grounded(position, &chunks) {
-            grounded = true;
-            current_velocity.y = 0.0;
-            position.y = position.y - dist + (PLAYER_HEIGHT * 0.5);
-        }
+    if current_velocity.y <= 0.0
+        && let Some(dist) = check_grounded(position, &chunks)
+    {
+        grounded = true;
+        current_velocity.y = 0.0;
+        position.y = position.y - dist + (PLAYER_HEIGHT * 0.5);
     }
 
     on_ground.value = grounded;

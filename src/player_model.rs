@@ -57,26 +57,28 @@ fn play_player_animation(
     }
 }
 
+type PlayerModelQuery<'w, 's> = Query<'w, 's, (&'static mut Transform, &'static PlayerAnimation), (With<PlayerRoot>, Without<Player>)>;
+
 pub fn sync_player_model(
     player_q: Query<(&Transform, &LookAngles, &Velocity), With<Player>>,
-    mut model_q: Query<(&mut Transform, &PlayerAnimation), (With<PlayerRoot>, Without<Player>)>,
+    mut model_q: PlayerModelQuery,
     mut animation_q: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
 ) {
-    if let Ok((player_transform, look_angles, velocity)) = player_q.single() {
-        if let Ok((mut model_transform, animation)) = model_q.single_mut() {
-            model_transform.translation = player_transform.translation - Vec3::Y * 0.9;
-            model_transform.rotation = Quat::from_rotation_y(look_angles.yaw + PI);
+    if let (Ok((player_transform, look_angles, velocity)), Ok((mut model_transform, animation))) =
+        (player_q.single(), model_q.single_mut())
+    {
+        model_transform.translation = player_transform.translation - Vec3::Y * 0.9;
+        model_transform.rotation = Quat::from_rotation_y(look_angles.yaw + PI);
 
-            if let Ok((mut player, mut transitions)) = animation_q.single_mut() {
-                let next = if velocity.value.x * velocity.value.x + velocity.value.z * velocity.value.z > 0.1 {
-                    animation.run
-                } else {
-                    animation.idle
-                };
+        if let Ok((mut player, mut transitions)) = animation_q.single_mut() {
+            let next = if velocity.value.x * velocity.value.x + velocity.value.z * velocity.value.z > 0.1 {
+                animation.run
+            } else {
+                animation.idle
+            };
 
-                if !player.playing_animations().any(|(&playing, _)| playing == next) {
-                    transitions.play(&mut player, next, Duration::from_millis(120)).repeat();
-                }
+            if !player.playing_animations().any(|(&playing, _)| playing == next) {
+                transitions.play(&mut player, next, Duration::from_millis(120)).repeat();
             }
         }
     }
