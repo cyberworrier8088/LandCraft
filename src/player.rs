@@ -503,67 +503,76 @@ pub fn select_block(
 
     while distance <= 6.0 {
         let point = camera.translation() + forward * distance;
-        let block_pos = point.round();
+        let block_i = IVec3::new(to_block(point.x), to_block(point.y), to_block(point.z));
+        let block_pos = block_i.as_vec3();
 
-        let chunk_x = (block_pos.x / 16.0).floor() as i32;
-        let chunk_y = (block_pos.y / 16.0).floor() as i32;
-        let chunk_z = (block_pos.z / 16.0).floor() as i32;
-        let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
+        let chunk_coord = IVec3::new(
+            block_i.x.div_euclid(16),
+            block_i.y.div_euclid(16),
+            block_i.z.div_euclid(16),
+        );
+        let lx = block_i.x.rem_euclid(16) as usize;
+        let ly = block_i.y.rem_euclid(16) as usize;
+        let lz = block_i.z.rem_euclid(16) as usize;
 
         let mut hit = false;
         for (_entity, chunk_transform, mut chunk, mesh3d) in chunks.iter_mut() {
             let chunk_pos_block = chunk_coord * 16;
             if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
-                let lx = (block_pos.x as i32 - chunk_pos_block.x) as usize;
-                let ly = (block_pos.y as i32 - chunk_pos_block.y) as usize;
-                let lz = (block_pos.z as i32 - chunk_pos_block.z) as usize;
+                let idx = lx + ly * 16 + lz * 256;
+                if chunk.blocks[idx] != BlockType::Air {
+                    hit = true;
+                    selected_block.pos = Some(block_pos);
 
-                if lx < 16 && ly < 16 && lz < 16 {
-                    let idx = lx + ly * 16 + lz * 256;
-                    if chunk.blocks[idx] != BlockType::Air {
-                        hit = true;
-                        selected_block.pos = Some(block_pos);
+                    if left {
+                        chunk.blocks[idx] = BlockType::Air;
+                        if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                            *mesh = create_chunk_mesh(&chunk.blocks);
+                        }
+                    } else if right {
+                        let diff = last - block_pos;
+                        let hit_normal = if diff.x.abs() >= diff.y.abs() && diff.x.abs() >= diff.z.abs() {
+                            IVec3::new(diff.x.signum() as i32, 0, 0)
+                        } else if diff.y.abs() >= diff.z.abs() {
+                            IVec3::new(0, diff.y.signum() as i32, 0)
+                        } else {
+                            IVec3::new(0, 0, diff.z.signum() as i32)
+                        };
 
-                        if left {
-                            chunk.blocks[idx] = BlockType::Air;
-                            if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
-                                *mesh = create_chunk_mesh(&chunk.blocks);
-                            }
-                        } else if right {
-                            let place = last.round();
-                            let d = player_transform.translation - place;
-                            if d.x.abs() >= PLAYER_WIDTH * 0.5 + 0.5 
-                                || d.y.abs() >= PLAYER_HEIGHT * 0.5 + 0.5 
-                                || d.z.abs() >= PLAYER_WIDTH * 0.5 + 0.5 
-                            {
-                                let place_chunk_x = (place.x / 16.0).floor() as i32;
-                                let place_chunk_y = (place.y / 16.0).floor() as i32;
-                                let place_chunk_z = (place.z / 16.0).floor() as i32;
-                                let place_chunk_coord = IVec3::new(place_chunk_x, place_chunk_y, place_chunk_z);
+                        let place_i = block_i + hit_normal;
+                        let place = place_i.as_vec3();
+                        let d = player_transform.translation - place;
 
-                                for (_place_entity, place_chunk_transform, mut place_chunk, place_mesh3d) in chunks.iter_mut() {
-                                    let place_chunk_pos_block = place_chunk_coord * 16;
-                                    if place_chunk_transform.translation.round().as_ivec3() == place_chunk_pos_block {
-                                        let plx = (place.x as i32 - place_chunk_pos_block.x) as usize;
-                                        let ply = (place.y as i32 - place_chunk_pos_block.y) as usize;
-                                        let plz = (place.z as i32 - place_chunk_pos_block.z) as usize;
+                        let in_player = d.x.abs() < PLAYER_WIDTH * 0.5 + 0.5
+                            && d.y.abs() < PLAYER_HEIGHT * 0.5 + 0.5
+                            && d.z.abs() < PLAYER_WIDTH * 0.5 + 0.5;
 
-                                        if plx < 16 && ply < 16 && plz < 16 {
-                                            let p_idx = plx + ply * 16 + plz * 256;
-                                            if let Some(block) = inventory.slots[inventory.selected_slot] {
-                                                place_chunk.blocks[p_idx] = block;
-                                            }
-                                            if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
-                                                *mesh = create_chunk_mesh(&place_chunk.blocks);
-                                            }
-                                        }
-                                        break;
+                        if !in_player {
+                            let place_chunk_coord = IVec3::new(
+                                place_i.x.div_euclid(16),
+                                place_i.y.div_euclid(16),
+                                place_i.z.div_euclid(16),
+                            );
+                            let plx = place_i.x.rem_euclid(16) as usize;
+                            let ply = place_i.y.rem_euclid(16) as usize;
+                            let plz = place_i.z.rem_euclid(16) as usize;
+
+                            for (_place_entity, place_chunk_transform, mut place_chunk, place_mesh3d) in chunks.iter_mut() {
+                                let place_chunk_pos_block = place_chunk_coord * 16;
+                                if place_chunk_transform.translation.round().as_ivec3() == place_chunk_pos_block {
+                                    let p_idx = plx + ply * 16 + plz * 256;
+                                    if let Some(block) = inventory.slots[inventory.selected_slot] {
+                                        place_chunk.blocks[p_idx] = block;
                                     }
+                                    if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
+                                        *mesh = create_chunk_mesh(&place_chunk.blocks);
+                                    }
+                                    break;
                                 }
                             }
                         }
-                        break;
                     }
+                    break;
                 }
             }
         }
@@ -573,7 +582,7 @@ pub fn select_block(
         }
 
         last = point;
-        distance += 0.1;
+        distance += 0.05;
     }
 }
 
@@ -608,8 +617,9 @@ pub fn update_block_highlight(
         With<BlockHighlight>,
     >,
 ) {
-    let (mut highlight_transform, mut visibility) =
-        highlight.single_mut().unwrap();
+    let Ok((mut highlight_transform, mut visibility)) = highlight.single_mut() else {
+        return;
+    };
 
     if let Some(pos) = selected_block.pos {
         highlight_transform.translation = pos;

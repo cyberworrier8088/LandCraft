@@ -28,7 +28,6 @@ pub struct Chunk {
 pub fn setup_world(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let atlas_texture = asset_server.load("block/200902092053_terrain.png");
@@ -42,21 +41,6 @@ pub fn setup_world(
     commands.insert_resource(BlockAssets {
         material: block_material.clone(),
     });
-
-    // Spawn a 1x2x1 grid of chunks to cover X: 0..16, Z: 0..16, Y: 0..32
-    spawn_chunk(
-        &mut commands,
-        &mut meshes,
-        &block_material,
-        IVec3::new(0, 0, 0),
-    );
-
-    spawn_chunk(
-        &mut commands,
-        &mut meshes,
-        &block_material,
-        IVec3::new(0, 1, 0),
-    );
 }
 
 
@@ -135,18 +119,19 @@ pub fn update_chunks(
 
     for x in -RENDER_DISTANCE..=RENDER_DISTANCE {
         for z in -RENDER_DISTANCE..=RENDER_DISTANCE {
+            for y in 0..=2 {
+                let chunk_pos = IVec3::new(player_chunk.x + x, y, player_chunk.z + z);
 
-            let chunk_pos = player_chunk + IVec3::new(x, 0, z);
+                if !loaded_chunks.chunks.contains(&chunk_pos) {
+                    spawn_chunk(
+                        &mut commands,
+                        &mut meshes,
+                        &block_assets.material,
+                        chunk_pos,
+                    );
 
-            if !loaded_chunks.chunks.contains(&chunk_pos) {
-                spawn_chunk(
-                    &mut commands,
-                    &mut meshes,
-                    &block_assets.material,
-                    chunk_pos,
-                );
-
-                loaded_chunks.chunks.insert(chunk_pos);
+                    loaded_chunks.chunks.insert(chunk_pos);
+                }
             }
         }
     }

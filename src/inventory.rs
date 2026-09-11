@@ -32,31 +32,18 @@ pub fn change_selected_slot(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut inventory: ResMut<Inventory>,
 ) {
-    if keyboard.just_pressed(KeyCode::Digit1) {
-        inventory.selected_slot = 0;
-    }
-    if keyboard.just_pressed(KeyCode::Digit2) {
-        inventory.selected_slot = 1;
-    }
-    if keyboard.just_pressed(KeyCode::Digit3) {
-        inventory.selected_slot = 2;
-    }
-    if keyboard.just_pressed(KeyCode::Digit4) {
-        inventory.selected_slot = 3;
-    }
-    if keyboard.just_pressed(KeyCode::Digit5) {
-        inventory.selected_slot = 4;
-    }
-    if keyboard.just_pressed(KeyCode::Digit6) {
-        inventory.selected_slot = 5;
-    }
-    if keyboard.just_pressed(KeyCode::Digit7) {
-        inventory.selected_slot = 6;
-    }
-    if keyboard.just_pressed(KeyCode::Digit8) {
-        inventory.selected_slot = 7;
-    }
-    if keyboard.just_pressed(KeyCode::Digit9) {
-        inventory.selected_slot = 8;
+    let new_slot = if keyboard.just_pressed(KeyCode::Digit1) { Some(0) }
+    else if keyboard.just_pressed(KeyCode::Digit2) { Some(1) }
+    else if keyboard.just_pressed(KeyCode::Digit3) { Some(2) }
+    else if keyboard.just_pressed(KeyCode::Digit4) { Some(3) }
+    else if keyboard.just_pressed(KeyCode::Digit5) { Some(4) }
+    else if keyboard.just_pressed(KeyCode::Digit6) { Some(5) }
+    else if keyboard.just_pressed(KeyCode::Digit7) { Some(6) }
+    else if keyboard.just_pressed(KeyCode::Digit8) { Some(7) }
+    else if keyboard.just_pressed(KeyCode::Digit9) { Some(8) }
+    else { None };
+
+    if let Some(slot) = new_slot {
+        inventory.selected_slot = slot;
     }
 }

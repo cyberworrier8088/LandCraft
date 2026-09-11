@@ -26,9 +26,9 @@ fn main() {
         .add_systems(Startup, (player::setup_player, world::setup_world, player::lock_cursor, ui::setup_crosshair, ui::setup_hotbar, player::setup_block_highlight, player_model::setup_player_model,))
     .add_systems(
         Update, (
+            inventory::change_selected_slot,
             ui::update_hotbar,
             ui::update_hotbar_icons,
-            inventory::change_selected_slot,
             world::update_chunks,
             (
                 player::mouse_look,
