@@ -12,31 +12,84 @@ pub enum BlockType {
     #[default]
     Air,
     Grass,
-    Cobblestone,
     Dirt,
-    Planks,
     Stone,
+    Cobblestone,
+    Planks,
     Bedrock,
+    Sand,
+    Gravel,
+    Wood,
+    Leaves,
+    Glass,
     Water,
     Lava,
     Sapling,
+    Rose,
+    Dandelion,
+    CoalOre,
+    IronOre,
+    GoldOre,
+    DiamondOre,
+    RedstoneOre,
+    Bricks,
+    Tnt,
+    Bookshelf,
+    MossyCobblestone,
+    Obsidian,
+    CraftingTable,
+    Furnace,
+    WhiteWool,
+    Snow,
+    Ice,
+    Clay,
+    Netherrack,
+    SoulSand,
+    Glowstone,
+    IronBlock,
+    GoldBlock,
+    DiamondBlock,
 }
 
 impl BlockType {
     pub fn is_solid(self) -> bool {
-        !matches!(self, BlockType::Air | BlockType::Water | BlockType::Lava | BlockType::Sapling)
+        !matches!(
+            self,
+            BlockType::Air
+                | BlockType::Water
+                | BlockType::Lava
+                | BlockType::Sapling
+                | BlockType::Rose
+                | BlockType::Dandelion
+        )
     }
 
     pub fn is_opaque(self) -> bool {
-        !matches!(self, BlockType::Air | BlockType::Water | BlockType::Lava | BlockType::Sapling)
+        !matches!(
+            self,
+            BlockType::Air
+                | BlockType::Water
+                | BlockType::Lava
+                | BlockType::Sapling
+                | BlockType::Rose
+                | BlockType::Dandelion
+                | BlockType::Leaves
+                | BlockType::Glass
+                | BlockType::Ice
+        )
     }
 
     pub fn is_unbreakable(self) -> bool {
         matches!(self, BlockType::Bedrock)
     }
+
+    pub fn is_cross_plant(self) -> bool {
+        matches!(
+            self,
+            BlockType::Sapling | BlockType::Rose | BlockType::Dandelion
+        )
+    }
 }
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CubeFace {
@@ -56,14 +109,63 @@ pub fn get_block_face_uvs(block: BlockType, face: CubeFace) -> [[f32; 2]; 4] {
             CubeFace::Bottom => (2, 0),
             _ => (3, 0),
         },
-        BlockType::Cobblestone => (0, 1),
         BlockType::Dirt => (2, 0),
-        BlockType::Planks => (4, 0),
         BlockType::Stone => (1, 0),
+        BlockType::Cobblestone => (0, 1),
+        BlockType::Planks => (4, 0),
         BlockType::Bedrock => (1, 1),
+        BlockType::Sand => (2, 1),
+        BlockType::Gravel => (3, 1),
+        BlockType::Wood => match face {
+            CubeFace::Top | CubeFace::Bottom => (5, 1),
+            _ => (4, 1),
+        },
+        BlockType::Leaves => (4, 3),
+        BlockType::Glass => (1, 3),
         BlockType::Water => (14, 0),
-        BlockType::Lava => (14, 1),
+        BlockType::Lava => (13, 14),
         BlockType::Sapling => (15, 0),
+        BlockType::Rose => (12, 0),
+        BlockType::Dandelion => (13, 0),
+        BlockType::CoalOre => (2, 2),
+        BlockType::IronOre => (1, 2),
+        BlockType::GoldOre => (0, 2),
+        BlockType::DiamondOre => (2, 3),
+        BlockType::RedstoneOre => (3, 3),
+        BlockType::Bricks => (7, 0),
+        BlockType::Tnt => match face {
+            CubeFace::Top => (9, 0),
+            CubeFace::Bottom => (10, 0),
+            _ => (8, 0),
+        },
+        BlockType::Bookshelf => match face {
+            CubeFace::Top | CubeFace::Bottom => (4, 0),
+            _ => (3, 2),
+        },
+        BlockType::MossyCobblestone => (4, 2),
+        BlockType::Obsidian => (5, 2),
+        BlockType::CraftingTable => match face {
+            CubeFace::Top => (11, 2),
+            CubeFace::Bottom => (4, 0),
+            CubeFace::Front => (11, 3),
+            _ => (12, 3),
+        },
+        BlockType::Furnace => match face {
+            CubeFace::Front => (12, 2),
+            CubeFace::Top => (14, 3),
+            CubeFace::Bottom => (1, 0),
+            _ => (13, 2),
+        },
+        BlockType::WhiteWool => (0, 4),
+        BlockType::Snow => (2, 4),
+        BlockType::Ice => (3, 4),
+        BlockType::Clay => (8, 4),
+        BlockType::Netherrack => (7, 6),
+        BlockType::SoulSand => (8, 6),
+        BlockType::Glowstone => (9, 6),
+        BlockType::IronBlock => (6, 1),
+        BlockType::GoldBlock => (7, 1),
+        BlockType::DiamondBlock => (8, 1),
     };
     get_tile_uvs(col, row)
 }
@@ -207,8 +309,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                 let y = ly as f32;
                 let z = lz as f32;
 
-                if block == BlockType::Sapling {
-                    let [c0, c1, c2, c3] = get_block_face_uvs(BlockType::Sapling, CubeFace::Front);
+                if block.is_cross_plant() {
+                    let [c0, c1, c2, c3] = get_block_face_uvs(block, CubeFace::Front);
                     let norm = std::f32::consts::FRAC_1_SQRT_2;
                     // Diagonal 1: (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
                     positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);

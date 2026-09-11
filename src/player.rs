@@ -588,7 +588,7 @@ pub fn select_block(
                                     let p_idx = plx + ply * 16 + plz * 256;
                                     if place_chunk.blocks[p_idx] == BlockType::Air {
                                         if let Some(block) = inventory.slots[inventory.selected_slot] {
-                                            if block == BlockType::Sapling {
+                                            if block.is_cross_plant() {
                                                 let below_y = ply as i32 - 1;
                                                 let can_place = if below_y >= 0 {
                                                     let b = place_chunk.blocks[plx + (below_y as usize) * 16 + plz * 256];
