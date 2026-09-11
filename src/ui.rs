@@ -56,9 +56,25 @@ pub struct HotbarIcon {
     pub index: usize,
 }
 
+fn block_icon_path(block: Option<BlockType>) -> &'static str {
+    match block {
+        Some(BlockType::Grass) => "ui/grass.png",
+        Some(BlockType::Cobblestone) => "ui/cobblestone.png",
+        Some(BlockType::Stone) => "ui/stone.png",
+        Some(BlockType::Dirt) => "ui/dirt.png",
+        Some(BlockType::Planks) => "ui/planks.png",
+        Some(BlockType::Sapling) => "ui/sapling.png",
+        Some(BlockType::Water) => "ui/water.png",
+        Some(BlockType::Lava) => "ui/lava.png",
+        Some(BlockType::Bedrock) => "ui/bedrock.png",
+        _ => "ui/empty.png",
+    }
+}
+
 pub fn setup_hotbar(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    inventory: Res<Inventory>,
 ) {
     commands.spawn((
         Hotbar,
@@ -77,10 +93,17 @@ pub fn setup_hotbar(
         BackgroundColor(Color::srgba(0.18, 0.12, 0.08, 1.0)),
     )).with_children(|parent| {
         for i in 0..9 {
+            let icon_path = block_icon_path(inventory.slots[i]);
+            let border_color = if i == inventory.selected_slot {
+                Color::WHITE
+            } else {
+                Color::BLACK
+            };
+
             parent.spawn((
                 HotbarSlot { index: i },
                 HotbarIcon { index: i },
-                ImageNode::new(asset_server.load("ui/empty.png")),
+                ImageNode::new(asset_server.load(icon_path)),
                 Node {
                     width: Val::Px(32.0),
                     height: Val::Px(32.0),
@@ -88,7 +111,7 @@ pub fn setup_hotbar(
                     ..default()
                 },
                 BackgroundColor(Color::srgba(0.30, 0.22, 0.15, 1.0)),
-                BorderColor::all(Color::BLACK),
+                BorderColor::all(border_color),
             ));
         } 
     });
@@ -121,13 +144,7 @@ pub fn update_hotbar_icons(
     }
 
     for (icon, mut image_node) in &mut icons {
-        match inventory.slots[icon.index] {
-            Some(BlockType::Air) | None => {
-                image_node.image = asset_server.load("ui/empty.png");
-            }
-            Some(_) => {
-                image_node.image = asset_server.load("ui/grass-block.png");
-            }
-        }
+        let path = block_icon_path(inventory.slots[icon.index]);
+        image_node.image = asset_server.load(path);
     }
 }

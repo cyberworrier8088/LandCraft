@@ -10,7 +10,7 @@ use crate::mesh::{create_block_mesh, create_chunk_mesh, BlockType};
 use crate::noise::terrain_height;
 
 // import chunk structures
-use crate::world::Chunk;
+use crate::world::{BlockAssets, Chunk};
 
 // import inventory
 use crate::inventory::Inventory;
@@ -477,14 +477,17 @@ pub struct SelectedBlock {
     pub pos: Option<Vec3>,
 }
 
+#[allow(clippy::too_many_arguments, clippy::collapsible_if)]
 pub fn select_block(
     mouse: Res<ButtonInput<MouseButton>>,
     camera: Query<&GlobalTransform, With<GameCamera>>,
-    mut chunks: Query<(Entity, &Transform, &mut Chunk, &Mesh3d), With<Chunk>>,
+    mut chunks: Query<(Entity, &Transform, &mut Chunk, Option<&Mesh3d>), With<Chunk>>,
     player: Query<&Transform, (With<Player>, Without<GameCamera>)>,
     mut selected_block: ResMut<SelectedBlock>,
     mut meshes: ResMut<Assets<Mesh>>,
     inventory: Res<Inventory>,
+    block_assets: Res<BlockAssets>,
+    mut commands: Commands,
 ) {
     selected_block.pos = None;
 
@@ -516,7 +519,7 @@ pub fn select_block(
         let lz = block_i.z.rem_euclid(16) as usize;
 
         let mut hit = false;
-        for (_entity, chunk_transform, mut chunk, mesh3d) in chunks.iter_mut() {
+        for (entity, chunk_transform, mut chunk, mesh3d_opt) in chunks.iter_mut() {
             let chunk_pos_block = chunk_coord * 16;
             if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
                 let idx = lx + ly * 16 + lz * 256;
@@ -533,8 +536,23 @@ pub fn select_block(
 
                     if left {
                         chunk.blocks[idx] = BlockType::Air;
-                        if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
-                            *mesh = create_chunk_mesh(&chunk.blocks);
+                        let new_mesh = create_chunk_mesh(&chunk.blocks);
+                        let has_verts = new_mesh.count_vertices() > 0;
+                        if let Some(mesh3d) = mesh3d_opt {
+                            if has_verts {
+                                if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                                    *mesh = new_mesh;
+                                }
+                            } else {
+                                commands.entity(entity).remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>)>();
+                                meshes.remove(&mesh3d.0);
+                            }
+                        } else if has_verts {
+                            let handle = meshes.add(new_mesh);
+                            commands.entity(entity).insert((
+                                Mesh3d(handle),
+                                MeshMaterial3d(block_assets.material.clone()),
+                            ));
                         }
                     } else if right {
                         let diff = last - block_pos;
@@ -564,16 +582,44 @@ pub fn select_block(
                             let ply = place_i.y.rem_euclid(16) as usize;
                             let plz = place_i.z.rem_euclid(16) as usize;
 
-                            for (_place_entity, place_chunk_transform, mut place_chunk, place_mesh3d) in chunks.iter_mut() {
+                            for (place_entity, place_chunk_transform, mut place_chunk, place_mesh3d_opt) in chunks.iter_mut() {
                                 let place_chunk_pos_block = place_chunk_coord * 16;
                                 if place_chunk_transform.translation.round().as_ivec3() == place_chunk_pos_block {
                                     let p_idx = plx + ply * 16 + plz * 256;
                                     if place_chunk.blocks[p_idx] == BlockType::Air {
                                         if let Some(block) = inventory.slots[inventory.selected_slot] {
+                                            if block == BlockType::Sapling {
+                                                let below_y = ply as i32 - 1;
+                                                let can_place = if below_y >= 0 {
+                                                    let b = place_chunk.blocks[plx + (below_y as usize) * 16 + plz * 256];
+                                                    matches!(b, BlockType::Grass | BlockType::Dirt)
+                                                } else {
+                                                    false
+                                                };
+                                                if !can_place {
+                                                    break;
+                                                }
+                                            }
+
                                             place_chunk.blocks[p_idx] = block;
-                                        }
-                                        if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
-                                            *mesh = create_chunk_mesh(&place_chunk.blocks);
+                                            let new_mesh = create_chunk_mesh(&place_chunk.blocks);
+                                            let has_verts = new_mesh.count_vertices() > 0;
+                                            if let Some(place_mesh3d) = place_mesh3d_opt {
+                                                if has_verts {
+                                                    if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
+                                                        *mesh = new_mesh;
+                                                    }
+                                                } else {
+                                                    commands.entity(place_entity).remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>)>();
+                                                    meshes.remove(&place_mesh3d.0);
+                                                }
+                                            } else if has_verts {
+                                                let handle = meshes.add(new_mesh);
+                                                commands.entity(place_entity).insert((
+                                                    Mesh3d(handle),
+                                                    MeshMaterial3d(block_assets.material.clone()),
+                                                ));
+                                            }
                                         }
                                     }
                                     break;

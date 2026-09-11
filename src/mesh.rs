@@ -61,8 +61,8 @@ pub fn get_block_face_uvs(block: BlockType, face: CubeFace) -> [[f32; 2]; 4] {
         BlockType::Planks => (4, 0),
         BlockType::Stone => (1, 0),
         BlockType::Bedrock => (1, 1),
-        BlockType::Water => (13, 12),
-        BlockType::Lava => (13, 14),
+        BlockType::Water => (14, 0),
+        BlockType::Lava => (14, 1),
         BlockType::Sapling => (15, 0),
     };
     get_tile_uvs(col, row)
@@ -206,6 +206,45 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                 let x = lx as f32;
                 let y = ly as f32;
                 let z = lz as f32;
+
+                if block == BlockType::Sapling {
+                    let [c0, c1, c2, c3] = get_block_face_uvs(BlockType::Sapling, CubeFace::Front);
+                    let norm = std::f32::consts::FRAC_1_SQRT_2;
+                    // Diagonal 1: (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
+                    positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y, -0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([-norm, 0.0, norm]);
+                    }
+                    uvs.extend_from_slice(&[c0, c1, c2, c3]);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                        vertex_index, vertex_index + 2, vertex_index + 1,
+                        vertex_index, vertex_index + 3, vertex_index + 2,
+                    ]);
+                    vertex_index += 4;
+
+                    // Diagonal 2: (-0.5, -0.5, 0.5) to (0.5, 0.5, -0.5)
+                    positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
+                    positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
+                    positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
+                    positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
+                    for _ in 0..4 {
+                        normals.push([norm, 0.0, norm]);
+                    }
+                    uvs.extend_from_slice(&[c0, c1, c2, c3]);
+                    indices.extend_from_slice(&[
+                        vertex_index, vertex_index + 1, vertex_index + 2,
+                        vertex_index, vertex_index + 2, vertex_index + 3,
+                        vertex_index, vertex_index + 2, vertex_index + 1,
+                        vertex_index, vertex_index + 3, vertex_index + 2,
+                    ]);
+                    vertex_index += 4;
+                    continue;
+                }
 
                 // Front (Z = +0.5)
                 if should_render_face(block, get_block(lx as i32, ly as i32, lz as i32 + 1)) {

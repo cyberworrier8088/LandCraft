@@ -34,6 +34,7 @@ pub fn setup_player_model(
         },
         WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(PLAYER_MODEL))),
         Transform::from_xyz(8.0, 8.0, 8.0),
+        Visibility::default(),
     )).observe(play_player_animation);
 }
 

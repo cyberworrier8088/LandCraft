@@ -50,6 +50,21 @@ impl RenderSettings {
     }
 }
 
+#[derive(Resource)]
+pub struct FluidTimer {
+    pub timer: Timer,
+    pub tick_count: u32,
+}
+
+impl Default for FluidTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.35, TimerMode::Repeating),
+            tick_count: 0,
+        }
+    }
+}
+
 pub const SEA_LEVEL: i32 = 8;
 
 // function for setup world using chunks.
@@ -64,6 +79,7 @@ pub fn setup_world(
         base_color_texture: Some(atlas_texture.clone()),
         perceptual_roughness: 0.9,
         reflectance: 0.1,
+        alpha_mode: AlphaMode::Mask(0.5),
         ..default()
     });
     
@@ -72,6 +88,7 @@ pub fn setup_world(
         material: block_material.clone(),
     });
     commands.insert_resource(RenderSettings::default());
+    commands.insert_resource(FluidTimer::default());
 }
 
 pub const CHUNK_SIZE: i32 = 16;
@@ -105,6 +122,8 @@ pub fn spawn_chunk(
 
                 if y_world <= 0 {
                     blocks[idx] = BlockType::Bedrock;
+                } else if y_world <= 3 && ((x_world * 31 + z_world * 17 + y_world) % 29).abs() == 0 {
+                    blocks[idx] = BlockType::Lava;
                 } else if y_world < height - 3 {
                     blocks[idx] = BlockType::Stone;
                 } else if y_world < height {
@@ -115,6 +134,8 @@ pub fn spawn_chunk(
                     } else {
                         blocks[idx] = BlockType::Grass;
                     }
+                } else if y_world == height + 1 && y_world > SEA_LEVEL && ((x_world * 73 + z_world * 37) % 47).abs() == 0 {
+                    blocks[idx] = BlockType::Sapling;
                 } else if y_world <= SEA_LEVEL {
                     blocks[idx] = BlockType::Water;
                 } else {
@@ -125,16 +146,22 @@ pub fn spawn_chunk(
     }
 
     let chunk_mesh = create_chunk_mesh(&blocks);
-    let mesh_handle = meshes.add(chunk_mesh);
+    let has_verts = chunk_mesh.count_vertices() > 0;
 
-    commands.spawn((
+    let mut entity_cmds = commands.spawn((
         Chunk {
             blocks,
         },
-        Mesh3d(mesh_handle),
-        MeshMaterial3d(block_material.clone()),
         Transform::from_translation(chunk_pos.as_vec3() * 16.0),
     ));
+
+    if has_verts {
+        let mesh_handle = meshes.add(chunk_mesh);
+        entity_cmds.insert((
+            Mesh3d(mesh_handle),
+            MeshMaterial3d(block_material.clone()),
+        ));
+    }
 }
 
 pub fn update_chunks(
@@ -192,5 +219,103 @@ pub fn regenerate_world(
             commands.entity(entity).despawn();
         }
         loaded_chunks.chunks.clear();
+    }
+}
+
+pub fn simulate_fluids(
+    time: Res<Time>,
+    mut fluid_timer: ResMut<FluidTimer>,
+    mut chunks: Query<(Entity, &mut Chunk, Option<&Mesh3d>), With<Chunk>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    block_assets: Res<BlockAssets>,
+    mut commands: Commands,
+) {
+    if !fluid_timer.timer.tick(time.delta()).just_finished() {
+        return;
+    }
+    fluid_timer.tick_count = fluid_timer.tick_count.wrapping_add(1);
+    let tick = fluid_timer.tick_count;
+
+    for (entity, mut chunk, mesh3d_opt) in chunks.iter_mut() {
+        let mut updates: Vec<(usize, BlockType)> = Vec::new();
+        let blocks_snapshot = chunk.blocks;
+
+        for ly in 0..16 {
+            for lz in 0..16 {
+                for lx in 0..16 {
+                    let idx = lx + ly * 16 + lz * 256;
+                    let block = blocks_snapshot[idx];
+
+                    if block != BlockType::Water && block != BlockType::Lava {
+                        continue;
+                    }
+
+                    // Lava spreads slower (every 2nd tick)
+                    if block == BlockType::Lava && !tick.is_multiple_of(2) {
+                        continue;
+                    }
+
+                    // 1. Flow downward
+                    if ly > 0 {
+                        let below_idx = lx + (ly - 1) * 16 + lz * 256;
+                        let below_block = blocks_snapshot[below_idx];
+                        if below_block == BlockType::Air || below_block == BlockType::Sapling {
+                            updates.push((below_idx, block));
+                            continue;
+                        } else if block == BlockType::Water && below_block == BlockType::Lava {
+                            updates.push((below_idx, BlockType::Stone));
+                            continue;
+                        } else if block == BlockType::Lava && below_block == BlockType::Water {
+                            updates.push((below_idx, BlockType::Cobblestone));
+                            continue;
+                        }
+                    }
+
+                    // 2. Horizontal flow
+                    let down_blocked = ly == 0 || blocks_snapshot[lx + (ly - 1) * 16 + lz * 256].is_solid();
+                    if down_blocked {
+                        for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+                            let nx = lx as i32 + dx;
+                            let nz = lz as i32 + dz;
+                            if (0..16).contains(&nx) && (0..16).contains(&nz) {
+                                let n_idx = nx as usize + ly * 16 + (nz as usize) * 256;
+                                let neighbor = blocks_snapshot[n_idx];
+                                if neighbor == BlockType::Air || neighbor == BlockType::Sapling {
+                                    updates.push((n_idx, block));
+                                } else if block == BlockType::Water && neighbor == BlockType::Lava {
+                                    updates.push((n_idx, BlockType::Cobblestone));
+                                } else if block == BlockType::Lava && neighbor == BlockType::Water {
+                                    updates.push((n_idx, BlockType::Stone));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !updates.is_empty() {
+            for (idx, new_type) in updates {
+                chunk.blocks[idx] = new_type;
+            }
+            let new_mesh = create_chunk_mesh(&chunk.blocks);
+            let has_verts = new_mesh.count_vertices() > 0;
+            if let Some(mesh3d) = mesh3d_opt {
+                if has_verts {
+                    if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                        *mesh = new_mesh;
+                    }
+                } else {
+                    commands.entity(entity).remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>)>();
+                    meshes.remove(&mesh3d.0);
+                }
+            } else if has_verts {
+                let handle = meshes.add(new_mesh);
+                commands.entity(entity).insert((
+                    Mesh3d(handle),
+                    MeshMaterial3d(block_assets.material.clone()),
+                ));
+            }
+        }
     }
 }

@@ -32,6 +32,7 @@ fn main() {
             world::cycle_render_distance,
             world::regenerate_world,
             world::update_chunks,
+            world::simulate_fluids,
             (
                 player::mouse_look,
                 player::player_movement,
