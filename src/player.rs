@@ -45,7 +45,7 @@ pub struct Velocity {
     pub value: Vec3,
 }
 
-const JUMP_FORCE: f32 = 8.0;
+const JUMP_FORCE: f32 = 8.7;
 const PLAYER_WIDTH: f32 = 0.6;
 const PLAYER_HEIGHT: f32 = 1.8;
 // onground
@@ -223,7 +223,7 @@ fn is_solid_block(pos: IVec3, chunks: &ChunkQuery) -> bool {
             let ly = pos.y.rem_euclid(16) as usize;
             let lz = pos.z.rem_euclid(16) as usize;
             let idx = lx + ly * 16 + lz * 256;
-            return chunk.blocks[idx] != BlockType::Air;
+            return chunk.blocks[idx].is_solid();
         }
     }
     false
@@ -520,7 +520,14 @@ pub fn select_block(
             let chunk_pos_block = chunk_coord * 16;
             if chunk_transform.translation.round().as_ivec3() == chunk_pos_block {
                 let idx = lx + ly * 16 + lz * 256;
-                if chunk.blocks[idx] != BlockType::Air {
+                let hit_block = chunk.blocks[idx];
+                if hit_block != BlockType::Air {
+                    // Bedrock cannot be broken, placed against, or selected
+                    if hit_block.is_unbreakable() {
+                        hit = true;
+                        break;
+                    }
+
                     hit = true;
                     selected_block.pos = Some(block_pos);
 
@@ -561,11 +568,13 @@ pub fn select_block(
                                 let place_chunk_pos_block = place_chunk_coord * 16;
                                 if place_chunk_transform.translation.round().as_ivec3() == place_chunk_pos_block {
                                     let p_idx = plx + ply * 16 + plz * 256;
-                                    if let Some(block) = inventory.slots[inventory.selected_slot] {
-                                        place_chunk.blocks[p_idx] = block;
-                                    }
-                                    if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
-                                        *mesh = create_chunk_mesh(&place_chunk.blocks);
+                                    if place_chunk.blocks[p_idx] == BlockType::Air {
+                                        if let Some(block) = inventory.slots[inventory.selected_slot] {
+                                            place_chunk.blocks[p_idx] = block;
+                                        }
+                                        if let Some(mut mesh) = meshes.get_mut(&place_mesh3d.0) {
+                                            *mesh = create_chunk_mesh(&place_chunk.blocks);
+                                        }
                                     }
                                     break;
                                 }

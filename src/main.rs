@@ -29,6 +29,8 @@ fn main() {
             inventory::change_selected_slot,
             ui::update_hotbar,
             ui::update_hotbar_icons,
+            world::cycle_render_distance,
+            world::regenerate_world,
             world::update_chunks,
             (
                 player::mouse_look,

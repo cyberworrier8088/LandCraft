@@ -11,20 +11,70 @@ pub const CHUNK_SIZE: usize = 16;
 pub enum BlockType {
     #[default]
     Air,
-    Cobblestone,
     Grass,
+    Cobblestone,
+    Dirt,
+    Planks,
+    Stone,
+    Bedrock,
+    Water,
+    Lava,
+    Sapling,
 }
 
-/// Creates a voxel block mesh with custom vertices, normals, and UV coordinates
-/// mapped to a 2-tile horizontal texture atlas (Left = Cobblestone, Right = Grass).
+impl BlockType {
+    pub fn is_solid(self) -> bool {
+        !matches!(self, BlockType::Air | BlockType::Water | BlockType::Lava | BlockType::Sapling)
+    }
+
+    pub fn is_opaque(self) -> bool {
+        !matches!(self, BlockType::Air | BlockType::Water | BlockType::Lava | BlockType::Sapling)
+    }
+
+    pub fn is_unbreakable(self) -> bool {
+        matches!(self, BlockType::Bedrock)
+    }
+}
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CubeFace {
+    Front,
+    Back,
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+pub fn get_block_face_uvs(block: BlockType, face: CubeFace) -> [[f32; 2]; 4] {
+    let (col, row) = match block {
+        BlockType::Air => (0, 0),
+        BlockType::Grass => match face {
+            CubeFace::Top => (0, 0),
+            CubeFace::Bottom => (2, 0),
+            _ => (3, 0),
+        },
+        BlockType::Cobblestone => (0, 1),
+        BlockType::Dirt => (2, 0),
+        BlockType::Planks => (4, 0),
+        BlockType::Stone => (1, 0),
+        BlockType::Bedrock => (1, 1),
+        BlockType::Water => (13, 12),
+        BlockType::Lava => (13, 14),
+        BlockType::Sapling => (15, 0),
+    };
+    get_tile_uvs(col, row)
+}
+
+/// Creates a voxel block mesh with custom vertices, normals, and UV coordinates.
 pub fn create_block_mesh(block_type: BlockType) -> Mesh {
-    // Initialize the mesh with TriangleList topology and default render asset usages
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     );
 
-    // 24 vertices for the 6 faces of the cube (4 vertices per face)
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         vec![
@@ -66,98 +116,31 @@ pub fn create_block_mesh(block_type: BlockType) -> Mesh {
         ],
     );
 
-    // 36 indices defining the 12 triangles of the cube
     mesh.insert_indices(Indices::U32(vec![
-        // Front
-        0, 1, 2,
-        0, 2, 3,
-        
-        // Back
-        4, 5, 6,
-        4, 6, 7,
-
-        // Left
-        8, 9, 10,
-        8, 10, 11,
-
-        // Right
-        12, 13, 14,
-        12, 14, 15,
-
-        // Top
-        16, 17, 18,
-        16, 18, 19,
-
-        // Bottom
-        20, 21, 22,
-        20, 22, 23,
+        0, 1, 2,  0, 2, 3,       // Front
+        4, 5, 6,  4, 6, 7,       // Back
+        8, 9, 10, 8, 10, 11,     // Left
+        12, 13, 14, 12, 14, 15,  // Right
+        16, 17, 18, 16, 18, 19,  // Top
+        20, 21, 22, 20, 22, 23,  // Bottom
     ]));
 
-    // 24 face-normal vectors pointing outward from the cube's center
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_NORMAL,
         vec![
-            // Front
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0],
-
-            // Back
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-            [0.0, 0.0, -1.0],
-
-            // Left
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-
-            // Right
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-
-            // Top
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 0.0],
-
-            // Bottom
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
-            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0],
+            [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0],
         ],
     );
 
-    // 24 texture coordinates mapped to the 16x16 grid terrain atlas.
-    let uv_vec = match block_type {
-        BlockType::Air => vec![[0.0, 0.0]; 24],
-        BlockType::Cobblestone => {
-            // Cobblestone/Stone block uses tile at Col 1, Row 0 for all 6 faces
-            let cobble_uvs = get_tile_uvs(1, 0);
-            let mut uvs = Vec::with_capacity(24);
-            for _ in 0..6 {
-                uvs.extend_from_slice(&cobble_uvs);
-            }
-            uvs
-        }
-        BlockType::Grass => {
-            // Grass block uses Grass tile at Col 0, Row 0 for all 6 faces
-            let grass_uvs = get_tile_uvs(0, 0);
-            let mut uvs = Vec::with_capacity(24);
-            for _ in 0..6 {
-                uvs.extend_from_slice(&grass_uvs);
-            }
-            uvs
-        }
-    };
-
+    let mut uv_vec = Vec::with_capacity(24);
+    for face in [CubeFace::Front, CubeFace::Back, CubeFace::Left, CubeFace::Right, CubeFace::Top, CubeFace::Bottom] {
+        uv_vec.extend_from_slice(&get_block_face_uvs(block_type, face));
+    }
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uv_vec);
 
     mesh
@@ -179,7 +162,6 @@ fn get_tile_uvs(col: u32, row: u32) -> [[f32; 2]; 4] {
 }
 
 /// Generates a single combined mesh for an entire chunk using Face Culling.
-/// Faces are only added if the adjacent block in that direction is Air.
 pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE]) -> Mesh {
     let mut positions = Vec::new();
     let mut normals = Vec::new();
@@ -200,6 +182,19 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
         }
     };
 
+    let should_render_face = |current: BlockType, neighbor: BlockType| -> bool {
+        if current == BlockType::Air {
+            return false;
+        }
+        if neighbor == BlockType::Air {
+            return true;
+        }
+        if !neighbor.is_opaque() && current != neighbor {
+            return true;
+        }
+        false
+    };
+
     for lz in 0..CHUNK_SIZE {
         for ly in 0..CHUNK_SIZE {
             for lx in 0..CHUNK_SIZE {
@@ -212,15 +207,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                 let y = ly as f32;
                 let z = lz as f32;
 
-                // Determine tile UVs based on block type
-                let tile_uvs = match block {
-                    BlockType::Cobblestone => get_tile_uvs(1, 0),
-                    BlockType::Grass => get_tile_uvs(0, 0),
-                    BlockType::Air => unreachable!(),
-                };
-
-                // Front (Z = +0.5) - check neighbor (lx, ly, lz + 1)
-                if get_block(lx as i32, ly as i32, lz as i32 + 1) == BlockType::Air {
+                // Front (Z = +0.5)
+                if should_render_face(block, get_block(lx as i32, ly as i32, lz as i32 + 1)) {
                     positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
                     positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
                     positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
@@ -228,7 +216,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([0.0, 0.0, 1.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Front));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,
@@ -236,8 +224,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     vertex_index += 4;
                 }
 
-                // Back (Z = -0.5) - check neighbor (lx, ly, lz - 1)
-                if get_block(lx as i32, ly as i32, lz as i32 - 1) == BlockType::Air {
+                // Back (Z = -0.5)
+                if should_render_face(block, get_block(lx as i32, ly as i32, lz as i32 - 1)) {
                     positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([-0.5 + x,  0.5 + y, -0.5 + z]);
@@ -245,7 +233,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([0.0, 0.0, -1.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Back));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,
@@ -253,8 +241,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     vertex_index += 4;
                 }
 
-                // Left (X = -0.5) - check neighbor (lx - 1, ly, lz)
-                if get_block(lx as i32 - 1, ly as i32, lz as i32) == BlockType::Air {
+                // Left (X = -0.5)
+                if should_render_face(block, get_block(lx as i32 - 1, ly as i32, lz as i32)) {
                     positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([-0.5 + x, -0.5 + y,  0.5 + z]);
                     positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
@@ -262,7 +250,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([-1.0, 0.0, 0.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Left));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,
@@ -270,8 +258,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     vertex_index += 4;
                 }
 
-                // Right (X = +0.5) - check neighbor (lx + 1, ly, lz)
-                if get_block(lx as i32 + 1, ly as i32, lz as i32) == BlockType::Air {
+                // Right (X = +0.5)
+                if should_render_face(block, get_block(lx as i32 + 1, ly as i32, lz as i32)) {
                     positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
                     positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
@@ -279,7 +267,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([1.0, 0.0, 0.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Right));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,
@@ -287,8 +275,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     vertex_index += 4;
                 }
 
-                // Top (Y = +0.5) - check neighbor (lx, ly + 1, lz)
-                if get_block(lx as i32, ly as i32 + 1, lz as i32) == BlockType::Air {
+                // Top (Y = +0.5)
+                if should_render_face(block, get_block(lx as i32, ly as i32 + 1, lz as i32)) {
                     positions.push([-0.5 + x,  0.5 + y,  0.5 + z]);
                     positions.push([ 0.5 + x,  0.5 + y,  0.5 + z]);
                     positions.push([ 0.5 + x,  0.5 + y, -0.5 + z]);
@@ -296,7 +284,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([0.0, 1.0, 0.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Top));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,
@@ -304,8 +292,8 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     vertex_index += 4;
                 }
 
-                // Bottom (Y = -0.5) - check neighbor (lx, ly - 1, lz)
-                if get_block(lx as i32, ly as i32 - 1, lz as i32) == BlockType::Air {
+                // Bottom (Y = -0.5)
+                if should_render_face(block, get_block(lx as i32, ly as i32 - 1, lz as i32)) {
                     positions.push([-0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([ 0.5 + x, -0.5 + y, -0.5 + z]);
                     positions.push([ 0.5 + x, -0.5 + y,  0.5 + z]);
@@ -313,7 +301,7 @@ pub fn create_chunk_mesh(blocks: &[BlockType; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SI
                     for _ in 0..4 {
                         normals.push([0.0, -1.0, 0.0]);
                     }
-                    uvs.extend_from_slice(&tile_uvs);
+                    uvs.extend_from_slice(&get_block_face_uvs(block, CubeFace::Bottom));
                     indices.extend_from_slice(&[
                         vertex_index, vertex_index + 1, vertex_index + 2,
                         vertex_index, vertex_index + 2, vertex_index + 3,

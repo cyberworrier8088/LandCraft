@@ -29,8 +29,8 @@ pub fn setup_crosshair(
             parent.spawn((
                 ImageNode::new(asset_server.load("ui/crosshair.png")),
                 Node {
-                    width: Val::Px(24.0),
-                    height: Val::Px(24.0),
+                    width: Val::Px(28.0),
+                    height: Val::Px(28.0),
 
                     ..default()
                 },
@@ -122,14 +122,11 @@ pub fn update_hotbar_icons(
 
     for (icon, mut image_node) in &mut icons {
         match inventory.slots[icon.index] {
-            Some(BlockType::Grass) => {
-                image_node.image = asset_server.load("ui/grass-block.png");
-            }
-            Some(BlockType::Cobblestone) => {
-                image_node.image = asset_server.load("ui/grass-block.png");
-            }
             Some(BlockType::Air) | None => {
                 image_node.image = asset_server.load("ui/empty.png");
+            }
+            Some(_) => {
+                image_node.image = asset_server.load("ui/grass-block.png");
             }
         }
     }

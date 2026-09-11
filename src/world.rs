@@ -24,16 +24,46 @@ pub struct Chunk {
     pub blocks: [BlockType; 16 * 16 * 16], // An array representing the local volume
 }
 
+#[derive(Resource)]
+pub struct RenderSettings {
+    pub distance_level: usize, // 0: Tiny (1), 1: Short (2), 2: Normal (3), 3: Far (4)
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self { distance_level: 1 }
+    }
+}
+
+impl RenderSettings {
+    pub fn chunk_distance(&self) -> i32 {
+        match self.distance_level {
+            0 => 1,
+            1 => 2,
+            2 => 3,
+            _ => 4,
+        }
+    }
+
+    pub fn cycle(&mut self) {
+        self.distance_level = (self.distance_level + 1) % 4;
+    }
+}
+
+pub const SEA_LEVEL: i32 = 8;
+
 // function for setup world using chunks.
 pub fn setup_world(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let atlas_texture = asset_server.load("block/200902092053_terrain.png");
+    let atlas_texture = asset_server.load("block/200905192307_terrain.png");
 
     let block_material = materials.add(StandardMaterial {
         base_color_texture: Some(atlas_texture.clone()),
+        perceptual_roughness: 0.9,
+        reflectance: 0.1,
         ..default()
     });
     
@@ -41,15 +71,12 @@ pub fn setup_world(
     commands.insert_resource(BlockAssets {
         material: block_material.clone(),
     });
+    commands.insert_resource(RenderSettings::default());
 }
-
-
 
 pub const CHUNK_SIZE: i32 = 16;
 
-
 // helper function to convert world cooredenetr to chunk
-
 pub fn world_to_chunk(pos: Vec3) -> IVec3 {
     IVec3::new(
         (pos.x / CHUNK_SIZE as f32).floor() as i32,
@@ -75,10 +102,21 @@ pub fn spawn_chunk(
             for ly in 0..16 {
                 let y_world = chunk_pos.y * 16 + ly as i32;
                 let idx = lx + ly * 16 + lz * 256;
-                if y_world < height {
-                    blocks[idx] = BlockType::Cobblestone;
+
+                if y_world <= 0 {
+                    blocks[idx] = BlockType::Bedrock;
+                } else if y_world < height - 3 {
+                    blocks[idx] = BlockType::Stone;
+                } else if y_world < height {
+                    blocks[idx] = BlockType::Dirt;
                 } else if y_world == height {
-                    blocks[idx] = BlockType::Grass;
+                    if y_world < SEA_LEVEL {
+                        blocks[idx] = BlockType::Dirt;
+                    } else {
+                        blocks[idx] = BlockType::Grass;
+                    }
+                } else if y_world <= SEA_LEVEL {
+                    blocks[idx] = BlockType::Water;
                 } else {
                     blocks[idx] = BlockType::Air;
                 }
@@ -88,7 +126,6 @@ pub fn spawn_chunk(
 
     let chunk_mesh = create_chunk_mesh(&blocks);
     let mesh_handle = meshes.add(chunk_mesh);
-
 
     commands.spawn((
         Chunk {
@@ -100,11 +137,10 @@ pub fn spawn_chunk(
     ));
 }
 
-
-
 pub fn update_chunks(
     player: Query<&Transform, With<Player>>,
     mut loaded_chunks: ResMut<LoadedChunks>,
+    render_settings: Res<RenderSettings>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     block_assets: Res<BlockAssets>,
@@ -114,12 +150,11 @@ pub fn update_chunks(
     };
 
     let player_chunk = world_to_chunk(player_transform.translation);
+    let render_dist = render_settings.chunk_distance();
 
-    const RENDER_DISTANCE: i32 = 1;
-
-    for x in -RENDER_DISTANCE..=RENDER_DISTANCE {
-        for z in -RENDER_DISTANCE..=RENDER_DISTANCE {
-            for y in 0..=2 {
+    for x in -render_dist..=render_dist {
+        for z in -render_dist..=render_dist {
+            for y in 0..=3 {
                 let chunk_pos = IVec3::new(player_chunk.x + x, y, player_chunk.z + z);
 
                 if !loaded_chunks.chunks.contains(&chunk_pos) {
@@ -134,5 +169,28 @@ pub fn update_chunks(
                 }
             }
         }
+    }
+}
+
+pub fn cycle_render_distance(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut render_settings: ResMut<RenderSettings>,
+) {
+    if keyboard.just_pressed(KeyCode::KeyF) {
+        render_settings.cycle();
+    }
+}
+
+pub fn regenerate_world(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut loaded_chunks: ResMut<LoadedChunks>,
+    chunks: Query<Entity, With<Chunk>>,
+    mut commands: Commands,
+) {
+    if keyboard.just_pressed(KeyCode::KeyN) {
+        for entity in &chunks {
+            commands.entity(entity).despawn();
+        }
+        loaded_chunks.chunks.clear();
     }
 }
